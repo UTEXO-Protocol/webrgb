@@ -200,8 +200,6 @@ export interface RgbBurnRecipient {
 }
 
 export interface RgbBurnAssetArgs {
-  /** Fresh UUIDv4 per intent; persist it before calling and reuse it on retry. */
-  requestId: string;
   /** Expected RGB network, checked against getInfo().network. */
   network: string;
   assetId: string;
@@ -215,7 +213,6 @@ export interface RgbBurnAssetArgs {
 
 /** Returned after broadcast; it does not report an EVM payout. */
 export interface RgbBurnAssetResult {
-  requestId: string;
   transferId: string | number;
   txid: string;
   assetId: string;
@@ -250,8 +247,6 @@ export interface RgbTransfer {
   status?: RgbTransferStatus;
   kind?: string;
   amount?: number;
-  /** Burn request handle, also accepted by getTransferStatus for its origin. */
-  requestId?: string;
   /** Exact burn amount; use this instead of the legacy numeric amount. */
   amountBaseUnits?: string;
   /** Actual Bitcoin anchor height; null while unconfirmed or unknown. */

@@ -80,7 +80,7 @@ Beyond the connection, consent is per call:
 | `blindReceive` | MUST | Creates an invoice that binds a UTXO |
 | `issueAsset` | MUST | Mints; MAY also require a separate wallet capability |
 | `sendAsset` | MUST | Moves assets |
-| `burnAsset` | MUST | Burns assets; a completed retry returns its saved result (§4.1) |
+| `burnAsset` | MUST | Burns assets (§4.1) |
 | `getConsignment` | MUST unless already approved | Shares the named proof with this origin (§4.1) |
 | `makeLnInvoice`, `payLnInvoice` | MUST | Moves, or commits to receiving, assets over Lightning |
 
@@ -154,9 +154,9 @@ asset) and retrieve its proof. Wallets MUST advertise each method only when
 their active backend supports it. Neither `RGB_L1` nor `RGB_LN` implies BFA
 support. Existing methods and their numeric amount fields are unchanged.
 
-- **`burnAsset({ requestId, network, assetId, amount, burnRecipient, … })`**
+- **`burnAsset({ network, assetId, amount, burnRecipient, … })`**
   burns the specified amount and resolves after the Bitcoin transaction has
-  been broadcast. It returns `{ requestId, transferId, txid, assetId, amount,
+  been broadcast. It returns `{ transferId, txid, assetId, amount,
   burnRecipient, status, minConfirmations }`. This reports an RGB transfer,
   not an EVM payout; the call MUST NOT wait for settlement to return a txid.
 - **`amount`** MUST be a positive decimal integer string in base units, with
@@ -175,38 +175,23 @@ support. Existing methods and their numeric amount fields are unchanged.
   RGB network, EVM chain and address, and Bitcoin fee. `feeRate`, when supplied,
   is a finite positive number in sat/vB and MUST be checked against the
   backend's supported range. `minConfirmations` MUST be a non-negative safe
-  integer when supplied; the wallet
-  MAY raise it to its floor and MUST show and return the value actually used.
+  integer when supplied; the wallet MAY raise it to its floor and MUST show
+  and return the value actually used.
   The prompt MAY also ask to share this burn's proof with this origin.
-- **`requestId`** is a UUIDv4 the dApp MUST persist with the arguments before
-  calling. The wallet MUST durably bind it to the wallet, origin, network and
-  normalized arguments before the irreversible step, and retain the record
-  across reconnects and restarts. A completed retry MUST return the saved
-  result without another burn or prompt. Reusing it with different arguments
-  MUST reject with `INVALID_PARAMS`. Concurrent requests with the same id MUST
-  refer to one operation. A rejected intent MUST stay rejected on retry;
-  another intent needs a new id and a new confirmation.
-- **Recovery** MUST NOT treat a timeout as proof that broadcast failed. If
-  the wallet cannot determine whether an in-flight burn was broadcast, it
-  MUST reject a retry with `INTERNAL_ERROR` and reconcile the existing
-  operation before allowing another burn that could duplicate it. A dApp MUST
-  NOT generate a fresh id automatically to get past this error. This does not
-  require a backend to recover an outcome it cannot establish.
-- **`getTransferStatus(requestId, assetId?)`** MUST also find a burn by its
-  request id for the requesting origin. It MUST return the actual RGB
-  transfer status, not the progress of the provider request. If the wallet
-  knows the request but cannot yet identify its transfer, it MUST reject
-  with `INTERNAL_ERROR`, explaining that execution is still in progress or
-  the outcome needs reconciliation. It MUST NOT invent a transfer, txid or
-  status, or report `found: false` for that unresolved request. Request
-  journal entries are not RGB transfers and MUST NOT appear in
-  `listTransfers()`. Once available, the burn transfer MUST carry
-  `requestId`, `amountBaseUnits`, `txid`, `blockHeight` and `confirmations`.
-  `blockHeight` is the actual Bitcoin anchor height,
-  or `null` when unconfirmed or unknown; confirmations are observed, never
-  the requested minimum. If confirmations cannot be established, the field
-  MUST be omitted and the dApp MUST wait. The existing result for an unknown
-  id is unchanged.
+- **Retries** have no idempotency guarantee, as with `sendAsset()`. A timeout
+  does not establish that broadcast failed. A dApp MUST NOT automatically
+  repeat `burnAsset()` after a timeout; it SHOULD inspect the wallet's
+  transfer history and resolve the outcome before asking for another burn.
+  Request deduplication and operation journals are implementation details,
+  not requirements of this extension.
+- **`getTransferStatus(transferId, assetId?)`** tracks a burn through the
+  existing transfer handle and MUST return its actual RGB transfer status.
+  Burn transfers MUST carry `amountBaseUnits`, `txid`, `blockHeight` and
+  `confirmations`. `blockHeight` is the actual Bitcoin anchor height, or
+  `null` when unconfirmed or unknown; confirmations are observed, never the
+  requested minimum. If confirmations cannot be established, the field MUST
+  be omitted and the dApp MUST wait. The existing result for an unknown
+  transfer is unchanged.
 - **`getConsignment({ assetId, txid })`** reads the saved proof for that burn.
   `txid` is the Bitcoin transaction id, as 64 hex characters. The result is
   `{ assetId, txid, encoding: "base64", data, byteLength, digest }`, where

@@ -9,11 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Proposed optional `burnAsset()` and `getConsignment()` in the UTEXO fork,
-  with argument/result types, exact decimal burn amounts, per-origin consent,
-  durable request ids and saved Base64 proofs. Existing providers need not
-  implement them.
-- Optional burn request, amount and Bitcoin anchor fields on `RgbTransfer`.
-  Request recovery stays separate from the existing RGB transfer statuses.
+  with argument/result types, exact decimal burn amounts, per-origin consent
+  and saved Base64 proofs. Existing providers need not implement them.
+- Optional burn amount and Bitcoin anchor fields on `RgbTransfer`, using the
+  existing transfer handles and statuses. Burn retries have no idempotency
+  guarantee, as with `sendAsset()`.
 - Browser/mobile integration guidance, without a dependency on a wallet SDK
   or a new transport implementation.
 - Type coverage and read-only checks for advertised BFA methods. Conformance

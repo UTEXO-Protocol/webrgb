@@ -82,7 +82,6 @@ async function useBurn(provider: RgbProvider): Promise<void> {
       !provider.burnAsset || !provider.getConsignment) return;
 
   const args: RgbBurnAssetArgs = {
-    requestId: crypto.randomUUID(),
     network: info.network,
     assetId: "rgb:bfa",
     amount: "18446744073709551615",
@@ -96,7 +95,7 @@ async function useBurn(provider: RgbProvider): Promise<void> {
   const noChain: RgbBurnAssetArgs = { ...args, burnRecipient: { address: "0x11" } };
   // @ts-expect-error the expected RGB network is required
   const noNetwork: RgbBurnAssetArgs = {
-    requestId: args.requestId, assetId: args.assetId,
+    assetId: args.assetId,
     amount: args.amount, burnRecipient: args.burnRecipient,
   };
   void [imprecise, noChain, noNetwork];
@@ -115,7 +114,7 @@ async function useBurn(provider: RgbProvider): Promise<void> {
   await provider.getConsignment({ txid: burn.txid });
   // @ts-expect-error chunk offsets belong to the transport, not the public method
   await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid, offset: 0 });
-  const status = await provider.getTransferStatus(args.requestId, args.assetId);
+  const status = await provider.getTransferStatus(burn.transferId, burn.assetId);
   status.transfer?.amountBaseUnits?.toUpperCase();
   status.transfer?.blockHeight?.toFixed();
   status.transfer?.confirmations?.toFixed();

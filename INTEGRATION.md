@@ -84,9 +84,9 @@ the user approves in the wallet, and the returned invoice goes to the bridge
 or faucet. The wallet tracks the receive with the existing transfer methods.
 `issueAsset()` creates a new asset and is a separate operation.
 
-For burn, the dApp checks both optional methods and persists the intent before
-calling. The following is the provider part of the flow; `persistIntent` and
-`persistBurn` represent the dApp's durable storage:
+For burn, the dApp checks both optional methods and saves the returned transfer
+handle before retrieving the proof. In this example, `persistBurn` represents
+the dApp's storage:
 
 ```ts
 import { supports } from "@kaleidorg/webrgb";
@@ -99,7 +99,6 @@ async function burnAndGetProof(provider: RgbProvider, args: RgbBurnAssetArgs) {
       !provider.burnAsset || !provider.getConsignment) {
     throw new Error("This wallet does not support BFA burn proofs");
   }
-  await persistIntent(args); // requestId was created once for this intent
   const burn = await provider.burnAsset(args);
   await persistBurn(burn);
   const proof = await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid });
@@ -107,14 +106,15 @@ async function burnAndGetProof(provider: RgbProvider, args: RgbBurnAssetArgs) {
 }
 ```
 
-A timeout leaves the operation unresolved. Keep the same `requestId`, query
-`getTransferStatus(requestId, assetId)` and recover the saved result; never
-retry by inventing another id. Once a txid is known, retrieving the proof can
-be retried independently without another burn. For a known request whose
-transfer cannot yet be identified, the status call rejects with
-`INTERNAL_ERROR`; this does not mean the burn failed. Request progress belongs
-to the wallet's operation journal. `getTransferStatus()` returns actual RGB
-transfer statuses once a transfer is available.
+Track the returned transfer with
+`getTransferStatus(burn.transferId, burn.assetId)`. Once its txid is known,
+retrieving the proof can be retried independently without another burn.
+
+As with `sendAsset()`, the contract does not guarantee idempotent retries.
+A timeout leaves the outcome unresolved: do not automatically repeat
+`burnAsset()`. Inspect the wallet's transfer history and resolve the outcome
+before requesting another burn. A wallet or transport may provide its own
+request deduplication, but this extension does not prescribe one.
 
 The bridge integration verifies the returned proof and waits for its required
 Bitcoin confirmations and the actual `blockHeight`. It can then send
