@@ -51,8 +51,6 @@ export declare function providerErrorCode(value: unknown): ProviderErrorCode;
 export type RgbProtocol = "RGB_L1" | "RGB_LN";
 
 export type RgbTransferStatus =
-  | "Pending" // burn request still executing
-  | "Unknown" // burn outcome needs reconciliation
   | "WaitingCounterparty"
   | "WaitingConfirmations"
   | "Settled"

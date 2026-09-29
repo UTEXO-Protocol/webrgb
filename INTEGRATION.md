@@ -110,7 +110,11 @@ async function burnAndGetProof(provider: RgbProvider, args: RgbBurnAssetArgs) {
 A timeout leaves the operation unresolved. Keep the same `requestId`, query
 `getTransferStatus(requestId, assetId)` and recover the saved result; never
 retry by inventing another id. Once a txid is known, retrieving the proof can
-be retried independently without another burn.
+be retried independently without another burn. For a known request whose
+transfer cannot yet be identified, the status call rejects with
+`INTERNAL_ERROR`; this does not mean the burn failed. Request progress belongs
+to the wallet's operation journal. `getTransferStatus()` returns actual RGB
+transfer statuses once a transfer is available.
 
 The bridge integration verifies the returned proof and waits for its required
 Bitcoin confirmations and the actual `blockHeight`. It can then send

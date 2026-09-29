@@ -193,12 +193,16 @@ support. Existing methods and their numeric amount fields are unchanged.
   NOT generate a fresh id automatically to get past this error. This does not
   require a backend to recover an outcome it cannot establish.
 - **`getTransferStatus(requestId, assetId?)`** MUST also find a burn by its
-  request id for the requesting origin. While its outcome is unresolved, it
-  MUST report `found: true`, a status of `Pending` (still executing) or
-  `Unknown` (needs reconciliation), and a transfer carrying `requestId`;
-  it MUST NOT report `found: false` or invent a txid. Once available, the burn
-  transfer MUST carry `requestId`, `amountBaseUnits`, `txid`, `blockHeight`
-  and `confirmations`. `blockHeight` is the actual Bitcoin anchor height,
+  request id for the requesting origin. It MUST return the actual RGB
+  transfer status, not the progress of the provider request. If the wallet
+  knows the request but cannot yet identify its transfer, it MUST reject
+  with `INTERNAL_ERROR`, explaining that execution is still in progress or
+  the outcome needs reconciliation. It MUST NOT invent a transfer, txid or
+  status, or report `found: false` for that unresolved request. Request
+  journal entries are not RGB transfers and MUST NOT appear in
+  `listTransfers()`. Once available, the burn transfer MUST carry
+  `requestId`, `amountBaseUnits`, `txid`, `blockHeight` and `confirmations`.
+  `blockHeight` is the actual Bitcoin anchor height,
   or `null` when unconfirmed or unknown; confirmations are observed, never
   the requested minimum. If confirmations cannot be established, the field
   MUST be omitted and the dApp MUST wait. The existing result for an unknown

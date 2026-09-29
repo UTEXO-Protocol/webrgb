@@ -13,6 +13,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   durable request ids and saved Base64 proofs. Existing providers need not
   implement them.
 - Optional burn request, amount and Bitcoin anchor fields on `RgbTransfer`.
+  Request recovery stays separate from the existing RGB transfer statuses.
 - Browser/mobile integration guidance, without a dependency on a wallet SDK
   or a new transport implementation.
 - Type coverage and read-only checks for advertised BFA methods. Conformance
