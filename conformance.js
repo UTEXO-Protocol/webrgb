@@ -131,6 +131,15 @@ export async function runConformance(provider, options = {}) {
     }
   });
 
+  // An optional method may be absent. Inspect advertised functions without
+  // invoking them: a burn moves funds, and proof retrieval can disclose history.
+  for (const method of /** @type {const} */ (["burnAsset", "getConsignment"])) {
+    await check(`${method}-available`, () => {
+      if (!info || !supports(info, method)) return `the wallet does not serve ${method}`;
+      assert(typeof provider[method] === "function", `${method} is advertised but missing`);
+    });
+  }
+
   await check("getAddress-shape", async () => {
     const result = await provider.getAddress();
     assert(

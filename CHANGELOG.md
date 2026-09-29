@@ -6,6 +6,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Proposed optional `burnAsset()` and `getConsignment()` in the UTEXO fork,
+  with argument/result types, exact decimal burn amounts, per-origin consent,
+  durable request ids and saved Base64 proofs. Existing providers need not
+  implement them.
+- Optional burn request, amount and Bitcoin anchor fields on `RgbTransfer`.
+- Browser/mobile integration guidance, without a dependency on a wallet SDK
+  or a new transport implementation.
+- Type coverage and read-only checks for advertised BFA methods. Conformance
+  never burns assets or retrieves a private proof.
+
 ## [0.3.0] - 2026-09-26
 
 Resolves [#2](https://github.com/kaleidoswap/webrgb/issues/2) and
