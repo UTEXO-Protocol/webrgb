@@ -1,5 +1,5 @@
 /**
- * Runtime half of @kaleidorg/webrgb/conformance. Types live in conformance.d.ts.
+ * Runtime half of @utexo/webrgb/conformance. Types live in conformance.d.ts.
  */
 
 import { providerErrorCode, supports, toAssetArray, toTransferArray } from "./index.js";

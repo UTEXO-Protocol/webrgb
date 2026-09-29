@@ -11,7 +11,7 @@ import {
   supports,
   toAssetArray,
   toTransferArray,
-} from "@kaleidorg/webrgb";
+} from "@utexo/webrgb";
 import type {
   ProviderError,
   ProviderErrorCode,
@@ -21,11 +21,11 @@ import type {
   RgbProvider,
   RgbProviderDetail,
   RgbTransfer,
-} from "@kaleidorg/webrgb";
-import { createMockProvider, installMockProvider } from "@kaleidorg/webrgb/mock";
-import type { MockRgbProvider } from "@kaleidorg/webrgb/mock";
-import { formatReport, runConformance } from "@kaleidorg/webrgb/conformance";
-import type { ConformanceReport } from "@kaleidorg/webrgb/conformance";
+} from "@utexo/webrgb";
+import { createMockProvider, installMockProvider } from "@utexo/webrgb/mock";
+import type { MockRgbProvider } from "@utexo/webrgb/mock";
+import { formatReport, runConformance } from "@utexo/webrgb/conformance";
+import type { ConformanceReport } from "@utexo/webrgb/conformance";
 
 async function useRgb(): Promise<void> {
   if (!window.rgb) return;

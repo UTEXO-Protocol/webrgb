@@ -15,8 +15,9 @@ conventions.
 
 ## 1. Installing a provider
 
-A wallet MUST expose the provider object as `window.rgb` and MUST dispatch a
-`rgb:ready` `CustomEvent` on `window` once it is installed:
+For browser injection, a wallet MUST expose the provider object as
+`window.rgb` and MUST dispatch a `rgb:ready` `CustomEvent` on `window` once
+it is installed:
 
 ```js
 window.rgb = provider;
@@ -28,6 +29,10 @@ A page may run before or after the wallet, so a dApp MUST handle both orders —
 
 `window.rgb` is a single slot. A wallet SHOULD NOT overwrite a provider another
 wallet installed; it MUST still announce itself (§2) so the page can choose.
+
+A remote wallet MAY expose the same interface through a transport adapter.
+The dApp then uses a local provider object; browser injection and discovery
+are not required. Connection and method consent still apply.
 
 ## 2. Discovery
 
@@ -194,11 +199,11 @@ has not been enabled.
 
 ## 7. Conformance
 
-`@kaleidorg/webrgb/conformance` runs the read-only half of this document
+`@utexo/webrgb/conformance` runs the read-only half of this document
 against a live provider:
 
 ```js
-import { runConformance, formatReport } from "@kaleidorg/webrgb/conformance";
+import { runConformance, formatReport } from "@utexo/webrgb/conformance";
 console.log(formatReport(await runConformance(window.rgb)));
 ```
 
@@ -211,4 +216,4 @@ methods without calling `burnAsset()` or sharing a consignment.
 This document and `index.d.ts` version together. A method added to the
 interface is a minor version of the package; a changed signature is a major
 one. Where a wallet and this document disagree, the wallet is what pages see —
-[open an issue](https://github.com/kaleidoswap/webrgb/issues).
+[open an issue](https://github.com/UTEXO-Protocol/webrgb/issues).

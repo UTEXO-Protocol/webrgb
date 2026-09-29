@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@kaleidorg/webrgb` are documented here. The format is
+All notable changes to `@utexo/webrgb` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
@@ -11,7 +11,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Optional `burnAsset()` and `getConsignment()` types and specification for
   BFA burns and sharing their proofs with third parties, with user consent.
 - Type coverage and read-only checks for the optional methods.
-- A short wallet integration guide with SDK and mint/burn examples.
+- A short integration guide for dApp and wallet developers, with mint/burn examples.
+
+### Changed
+
+- Rename the UTEXO fork to `@utexo/webrgb`. WalletConnect is maintained in the
+  separate `@utexo/webrgb-walletconnect` project.
 
 ## [0.3.0] - 2026-09-26
 

@@ -1,69 +1,63 @@
-# Integrating a wallet
+# Integrating dApps and wallets
 
-WebRGB gives dApps a common interface to an RGB wallet. Your wallet can use
-any SDK, whether native, WASM or HTTP-based; the provider adapts it to the
-methods in [SPEC.md](./SPEC.md). The BFA methods below are UTEXO proposals.
+WebRGB defines the calls between a dApp and a wallet. The dApp uses a
+`RgbProvider`; the wallet implements its methods and handles user consent.
+Browser extensions and mobile wallets use the same method signatures.
+The BFA methods below are additions in this UTEXO fork.
 
-## Connecting
+## For dApp developers
 
-A browser extension injects a provider and answers WebRGB discovery. The dApp
-selects a wallet and calls `enable()` to request access.
-
-A mobile wallet can expose the same methods through a transport such as
-WalletConnect. The dApp displays a connection QR code or opens a deep link;
-the wallet asks the user to approve the connection. The dApp then uses a local
-provider object whose calls are forwarded to the phone. This package provides
-browser discovery; a WalletConnect adapter is separate work.
-
-Connection approval does not approve a burn or the sharing of a consignment.
-Those calls follow the consent rules in SPEC.md.
-
-## Adapting your SDK
-
-Your SDK's methods do not need WebRGB names. For example, a wallet using
-`bReceive` can expose it as `blindReceive`:
-
-```js
-async function blindReceive(args = {}) {
-  requireEnabledOrigin();
-  validateReceiveArgs(args);
-  await confirmReceive(args);
-  return myWallet.bReceive(args);
-}
-```
-
-The helpers above belong to your wallet app. This example assumes `bReceive`
-accepts WebRGB arguments and returns `RgbBlindReceiveResult`; map the fields
-if your SDK uses a different format. Preserve the requested asset and amount,
-and map backend errors to WebRGB error codes.
-
-## Mint and burn
-
-For mint, the dApp calls `blindReceive()`, the user approves the invoice in the
-wallet, and the returned invoice is sent to the bridge or faucet. `issueAsset()`
-creates a new asset; it is not used to receive an existing bridge asset.
-
-For burn, check that the wallet supports both optional methods. Here `args`
-follows `RgbBurnAssetArgs`, and `saveBurn` stores the result in the dApp:
+For a browser extension, discover the provider injected into the page:
 
 ```ts
-import { supports } from "@kaleidorg/webrgb";
+import { requestProvider } from "@utexo/webrgb";
 
-await provider.enable();
+const provider = await requestProvider({ enable: true });
+```
+
+For a mobile wallet, use a transport adapter to obtain the same provider
+interface. The dApp displays a connection QR or opens a deep link, and the
+user approves in their wallet. `@utexo/webrgb-walletconnect` is a separate
+project with its own setup and transport documentation.
+
+For mint, request an invoice and pass it to the bridge or faucet:
+
+```ts
+const { invoice } = await provider.blindReceive({ assetId, amount: 5 });
+```
+
+`issueAsset()` creates a new asset; it is not used to receive an existing
+bridge asset. For burn, check capabilities before calling the optional methods:
+
+```ts
+import { supports } from "@utexo/webrgb";
+
 const info = await provider.getInfo();
 if (!supports(info, "burnAsset") || !supports(info, "getConsignment") ||
     !provider.burnAsset || !provider.getConsignment) {
   throw new Error("This wallet does not support BFA burn proofs");
 }
-const burn = await provider.burnAsset(args);
-await saveBurn(burn);
+const burn = await provider.burnAsset(args); // RgbBurnAssetArgs
+await saveBurn(burn); // persist the result in your dApp
 const proof = await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid });
 ```
 
-With the user's consent, the dApp can share `proof.data` with a third party,
-such as a bridge, to verify the burn proof. The bridge integration handles
-Bitcoin confirmation requirements, unlock submission and payout tracking.
+With consent, share `proof.data` (Base64) with a third party to verify the
+burn proof. The receiving service handles confirmations, proof verification
+and any payout. Track the burn with
+`getTransferStatus(burn.transferId, burn.assetId)`. Proof retrieval can be
+retried using the saved txid. If a burn times out, check wallet history before
+requesting another burn.
 
-Track the burn with `getTransferStatus(burn.transferId, burn.assetId)`. Proof
-retrieval can be retried using the saved txid. If the burn call times out,
-check the wallet's history before requesting another burn.
+## For wallet developers
+
+Implement the methods in [SPEC.md](./SPEC.md) in your wallet app. For example,
+`blindReceive` validates the request, asks the user to confirm, creates an
+invoice through your wallet backend and returns `RgbBlindReceiveResult`.
+Your backend can be native, WASM or a node API; dApps do not call it directly.
+Map its arguments, results and errors to WebRGB.
+
+An extension injects this provider and joins discovery (§1–2 in the spec).
+A mobile wallet attaches it to a transport adapter. Keep access scoped to the
+approved dApp. Connection approval does not approve a burn or the sharing of
+a consignment; each method follows the consent rules in the specification.

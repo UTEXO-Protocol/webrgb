@@ -1,6 +1,6 @@
 # Security Policy
 
-`@kaleidorg/webrgb` is a typings package with one small runtime helper. It moves
+`@utexo/webrgb` is a typings package with one small runtime helper. It moves
 no funds itself, but dApps built on it drive a wallet that does, so we still
 treat reports seriously and welcome responsible disclosure.
 

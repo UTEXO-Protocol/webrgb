@@ -33,7 +33,7 @@ alongside; a declaration for a method no wallet serves helps nobody.
 
 ## Workflow
 
-1. Branch from `main`.
+1. Branch from `dev`; `main` tracks upstream.
 2. Keep `npm test` green; CI runs it on Node 20 and 22 and then installs the
    packed tarball into a bare project to prove it imports.
 3. Open a pull request with a short rationale. Link the extension change when
