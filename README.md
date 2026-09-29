@@ -4,6 +4,9 @@
 
 [`SPEC.md`](./SPEC.md) is the interface contract. The reference implementation is the [KaleidoSwap browser extension](https://docs.kaleidoswap.com/extensions/kaleidoswap-extension/dapp-connectivity) from 0.3.0 on. This package ships the TypeScript declarations, discovery, an in-memory mock wallet and a conformance suite.
 
+See [INTEGRATION.md](./INTEGRATION.md) for browser and mobile connection flows,
+SDK adapters, and mint/burn examples.
+
 ## Try it
 
 The [playground](https://kaleidoswap.github.io/webrgb/) imports this module and exercises every `window.rgb` method, with a live log of calls, results and error codes. Drive it against the extension with a signet or regtest wallet — or press **install mock wallet** and use it with nothing installed at all.

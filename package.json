@@ -28,6 +28,7 @@
     "conformance.d.ts",
     "README.md",
     "SPEC.md",
+    "INTEGRATION.md",
     "LICENSE",
     "CHANGELOG.md"
   ],

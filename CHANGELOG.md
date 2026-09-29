@@ -11,6 +11,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Optional `burnAsset()` and `getConsignment()` types and specification for
   BFA burns and sharing their proofs with third parties, with user consent.
 - Type coverage and read-only checks for the optional methods.
+- A short wallet integration guide with SDK and mint/burn examples.
 
 ## [0.3.0] - 2026-09-26
 
