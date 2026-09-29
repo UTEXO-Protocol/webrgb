@@ -53,7 +53,7 @@ try {
 | `issueAsset(args)` | Mint a new asset (gated by its own wallet capability) |
 | `listAssets()` / `getAssetBalance(id)` | Holdings |
 | `sendAsset(args)` | Send against an RGB invoice, or explicitly |
-| `burnAsset(args)` / `getConsignment(args)` | Optional BFA burn and retrieval of its saved proof; proposed in the UTEXO fork |
+| `burnAsset(args)` / `getConsignment(args)` | Optional BFA burn and consignment sharing for third-party proof verification (UTEXO proposal) |
 | `listTransfers(id?)` / `getTransferStatus(id)` | Transfer history and status |
 | `decodeRgbInvoice(invoice)` | What an invoice asks for, before you pay it — read-only, no prompt |
 | `makeLnInvoice(args)` / `payLnInvoice(args)` | RGB over Lightning; listed in `methods` only when the wallet has a Lightning node |
@@ -87,17 +87,6 @@ announceProvider({
   provider,
 });
 ```
-
-## Mobile wallets and BFA burns
-
-The same method contract can be served by a mobile wallet through a remote
-provider adapter. The wallet supplies its own RGB backend; it need not use a
-particular SDK or expose its backend's method names to the dApp.
-
-[INTEGRATION.md](./INTEGRATION.md) shows the browser and mobile flows, an
-invoice adapter and the proposed `burnAsset` / `getConsignment` calls. This
-package does not yet ship a WalletConnect transport or a BFA mock backend.
-The existing mock does not advertise the optional BFA methods.
 
 ## Building without a wallet
 

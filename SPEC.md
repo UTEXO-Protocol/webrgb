@@ -2,8 +2,8 @@
 
 **Status:** draft, version 1. The interface is implemented by the KaleidoSwap
 browser extension ≥ 0.3.0 and described by `index.d.ts` in this repository.
-The optional BFA extension (§4.1) is a proposal in the UTEXO fork; it is not
-part of that extension's existing implementation.
+The optional burn methods below are UTEXO proposals, not part of that
+reference implementation.
 
 A **wallet** injects a provider into a web page. A **dApp** calls it to issue,
 receive, send and track [RGB](https://rgb.tech) assets, and to pay or receive
@@ -15,8 +15,8 @@ conventions.
 
 ## 1. Installing a provider
 
-An injected wallet MUST expose the provider object as `window.rgb` and MUST
-dispatch a `rgb:ready` `CustomEvent` on `window` once it is installed:
+A wallet MUST expose the provider object as `window.rgb` and MUST dispatch a
+`rgb:ready` `CustomEvent` on `window` once it is installed:
 
 ```js
 window.rgb = provider;
@@ -28,14 +28,6 @@ A page may run before or after the wallet, so a dApp MUST handle both orders —
 
 `window.rgb` is a single slot. A wallet SHOULD NOT overwrite a provider another
 wallet installed; it MUST still announce itself (§2) so the page can choose.
-
-A remote wallet, including a mobile wallet, MAY instead be reached through a
-transport adapter that gives the dApp a provider object with the same method
-contract. It need not install `window.rgb`. Browser discovery in §2 applies
-when the adapter elects to announce that object. Connection, permissions and
-errors MUST keep the semantics below; a transport MUST NOT bypass wallet
-confirmation. Native, WASM and HTTP wallet backends are implementation choices.
-See [INTEGRATION.md](./INTEGRATION.md) for the browser and mobile flows.
 
 ## 2. Discovery
 
@@ -80,8 +72,8 @@ Beyond the connection, consent is per call:
 | `blindReceive` | MUST | Creates an invoice that binds a UTXO |
 | `issueAsset` | MUST | Mints; MAY also require a separate wallet capability |
 | `sendAsset` | MUST | Moves assets |
-| `burnAsset` | MUST | Burns assets (§4.1) |
-| `getConsignment` | MUST unless already approved | Shares the named proof with this origin (§4.1) |
+| `burnAsset` | MUST | Burns assets |
+| `getConsignment` | MUST unless already approved | Shares a consignment with a third party to verify a burn proof |
 | `makeLnInvoice`, `payLnInvoice` | MUST | Moves, or commits to receiving, assets over Lightning |
 
 A prompt the user dismisses MUST reject with `USER_REJECTED`.
@@ -99,9 +91,9 @@ around them.
   methods the wallet will serve. A method absent from it MUST reject with
   `METHOD_NOT_SUPPORTED`; a method present in it MUST NOT. `makeLnInvoice` and
   `payLnInvoice` MUST appear only when `protocol` is `"RGB_LN"`, and
-  `issueAsset` only when the runtime can mint. The optional `burnAsset` and
-  `getConsignment` methods (§4.1) MAY be absent from the provider object when
-  unsupported; dApps MUST check both the method list and their presence.
+  `issueAsset` only when the runtime can mint. `burnAsset` and `getConsignment`
+  are optional and MAY be absent from the provider object when unsupported;
+  dApps MUST check both the method list and their presence.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
 - **`blindReceive({ assetId?, amount?, minConfirmations?, … })`** returns an
@@ -125,6 +117,21 @@ around them.
   A wallet MAY refuse `{ invoice }` for an any-amount invoice, since nothing
   in the request fixes what leaves the wallet; it MUST then reject with
   `INVALID_PARAMS`, and the explicit form is how a page pays one.
+- **`burnAsset({ network, assetId, amount, burnRecipient, … })`** burns a BFA
+  (bridged fungible asset) and returns `txid` and `transferId` after broadcast.
+  `amount` is a positive u64 decimal string in base units; `network` MUST
+  match the connected RGB network. `burnRecipient` identifies the EVM chain
+  and address. The wallet MUST validate the bridge route and show the asset,
+  amount, destination and Bitcoin fee in its confirmation. A dApp MUST NOT
+  automatically repeat a burn after a timeout.
+- **`getConsignment({ assetId, txid })`** returns the saved burn consignment
+  as Base64, with its byte length and digest as defined in `index.d.ts`.
+  The consignment can be shared with a third party, such as a bridge, to
+  verify the burn proof. The wallet MUST obtain consent to share this proof
+  with the requesting dApp and explain that it may be forwarded to a third
+  party; consent already given for that proof and dApp MAY be reused until
+  revoked. The result MUST contain the proof bytes, not a local file path,
+  and retrieval MUST NOT perform another burn.
 - **`listAssets()`** and **`listTransfers(assetId?)`** MUST return arrays.
   (Wallets that wrap them exist; `toAssetArray` / `toTransferArray` in this
   package tolerate that, and the conformance suite reports it.)
@@ -146,85 +153,6 @@ around them.
   confirmation MUST show the figure actually encoded.
 - **`payLnInvoice(invoice)`** pays a BOLT-11 invoice that carries an asset. A
   plain Bitcoin invoice SHOULD be refused — that is `webln.sendPayment()`.
-
-### 4.1. BFA burn and consignment retrieval (optional)
-
-These methods let a dApp request a burn of a BFA (bridged fungible
-asset) and retrieve its proof. Wallets MUST advertise each method only when
-their active backend supports it. Neither `RGB_L1` nor `RGB_LN` implies BFA
-support. Existing methods and their numeric amount fields are unchanged.
-
-- **`burnAsset({ network, assetId, amount, burnRecipient, … })`**
-  burns the specified amount and resolves after the Bitcoin transaction has
-  been broadcast. It returns `{ transferId, txid, assetId, amount,
-  burnRecipient, status, minConfirmations }`. This reports an RGB transfer,
-  not an EVM payout; the call MUST NOT wait for settlement to return a txid.
-- **`amount`** MUST be a positive decimal integer string in base units, with
-  no leading zeros, at most `18446744073709551615` (u64). Wallets and dApps
-  MUST NOT pass it through a JavaScript `Number`.
-- **`network`** MUST match the connected RGB network. `burnRecipient` is
-  `{ chainId, address }`: `chainId` is `eip155:` followed by a positive decimal
-  EVM chain id, and `address` is a 20-byte hex address with a `0x` prefix.
-  The wallet MUST check the asset and configured bridge route before prompting.
-  A known non-BFA asset or unsupported route MUST reject with `INVALID_PARAMS`;
-  an unknown asset uses `ASSET_NOT_FOUND`.
-  For rgb-lib's BFA burn, the recipient is 12 zero bytes followed by the
-  20-byte address. These 32 bytes do not encode the chain id; the wallet MUST
-  NOT infer or change the payout chain from the address alone.
-- **Confirmation** MUST show the requesting origin, asset, exact amount,
-  RGB network, EVM chain and address, and Bitcoin fee. `feeRate`, when supplied,
-  is a finite positive number in sat/vB and MUST be checked against the
-  backend's supported range. `minConfirmations` MUST be a non-negative safe
-  integer when supplied; the wallet MAY raise it to its floor and MUST show
-  and return the value actually used.
-  The prompt MAY also ask to share this burn's proof with this origin.
-- **Retries** have no idempotency guarantee, as with `sendAsset()`. A timeout
-  does not establish that broadcast failed. A dApp MUST NOT automatically
-  repeat `burnAsset()` after a timeout; it SHOULD inspect the wallet's
-  transfer history and resolve the outcome before asking for another burn.
-  Request deduplication and operation journals are implementation details,
-  not requirements of this extension.
-- **`getTransferStatus(transferId, assetId?)`** tracks a burn through the
-  existing transfer handle and MUST return its actual RGB transfer status.
-  Burn transfers MUST carry `amountBaseUnits`, `txid`, `blockHeight` and
-  `confirmations`. `blockHeight` is the actual Bitcoin anchor height, or
-  `null` when unconfirmed or unknown; confirmations are observed, never the
-  requested minimum. If confirmations cannot be established, the field MUST
-  be omitted and the dApp MUST wait. The existing result for an unknown
-  transfer is unchanged.
-- **`getConsignment({ assetId, txid })`** reads the saved proof for that burn.
-  `txid` is the Bitcoin transaction id, as 64 hex characters. The result is
-  `{ assetId, txid, encoding: "base64", data, byteLength, digest }`, where
-  `data` is the complete proof as standard padded Base64, with no `data:`
-  prefix. `byteLength` counts decoded bytes, and `digest` is
-  `{ algorithm: "keccak256", value: "0x…" }`, a 32-byte hash of those bytes,
-  not of the Base64 text. Retrieval MUST verify the asset/transaction pair
-  and MUST NOT perform another burn. Repeated retrieval returns the same
-  saved bytes. This version specifies burn proofs only, not arbitrary
-  wallet files or other transfer kinds.
-- **Proof sharing** requires `enable()` and approval for this origin and
-  asset/transaction pair. Approval given with the burn covers later retrieval
-  of that proof while permission remains granted. Otherwise the wallet MUST
-  ask, including for a historical burn. Revoked approval MUST NOT be reused.
-  The result MUST NOT expose a local path or depend on a dApp reading the
-  wallet's filesystem. rgb-lib saves BFA burn proofs locally; it does not
-  upload them to an RGB proxy.
-- **Proof errors** use the existing codes: malformed arguments use
-  `INVALID_PARAMS`, an unknown asset uses `ASSET_NOT_FOUND`, and a missing or
-  not-yet-available proof uses `INTERNAL_ERROR` with an explanatory message.
-  Failure to retrieve a proof MUST NOT initiate another burn.
-
-A transport MAY split the proof into bounded messages. Its dApp adapter MUST
-check the asset/transaction pair, byte length and digest, and reassemble the
-complete result before resolving `getConsignment()`. Chunking and resume
-belong to the transport binding, not to this public method's arguments.
-
-A bridge dApp obtains a receive invoice with `blindReceive()` for mint; it
-does not use `issueAsset()` to mint an existing bridge asset. For release it
-calls `burnAsset()`, then `getConsignment()`, and waits for the actual anchor
-height and confirmations required by its bridge before submitting the proof.
-Bridge API calls and EVM payout tracking are outside this provider contract.
-`transferSettled` continues to mean RGB settlement only.
 
 ## 5. Events
 
@@ -275,9 +203,8 @@ console.log(formatReport(await runConformance(window.rgb)));
 ```
 
 It never issues, sends or creates an invoice, so it raises no confirmation and
-costs nothing to run against a funded wallet. For the optional BFA extension,
-it checks that advertised methods exist, but MUST NOT call `burnAsset` or
-`getConsignment`: even proof retrieval can ask to share private wallet data.
+costs nothing to run against a funded wallet. It checks advertised burn
+methods without calling `burnAsset()` or sharing a consignment.
 
 ## 8. Changes
 

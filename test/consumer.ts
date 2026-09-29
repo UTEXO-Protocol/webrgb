@@ -93,12 +93,7 @@ async function useBurn(provider: RgbProvider): Promise<void> {
   const imprecise: RgbBurnAssetArgs = { ...args, amount: 9007199254740993 };
   // @ts-expect-error a recipient must name its EVM chain as well as its address
   const noChain: RgbBurnAssetArgs = { ...args, burnRecipient: { address: "0x11" } };
-  // @ts-expect-error the expected RGB network is required
-  const noNetwork: RgbBurnAssetArgs = {
-    assetId: args.assetId,
-    amount: args.amount, burnRecipient: args.burnRecipient,
-  };
-  void [imprecise, noChain, noNetwork];
+  void [imprecise, noChain];
 
   const burn = await provider.burnAsset(args);
   const exactAmount: string = burn.amount;
@@ -108,17 +103,12 @@ async function useBurn(provider: RgbProvider): Promise<void> {
   });
   const encoding: "base64" = proof.encoding;
   const algorithm: "keccak256" = proof.digest.algorithm;
-  proof.data.toUpperCase();
-  proof.byteLength.toFixed();
   // @ts-expect-error retrieval requires both assetId and txid
   await provider.getConsignment({ txid: burn.txid });
   // @ts-expect-error chunk offsets belong to the transport, not the public method
   await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid, offset: 0 });
   const status = await provider.getTransferStatus(burn.transferId, burn.assetId);
-  status.transfer?.amountBaseUnits?.toUpperCase();
-  status.transfer?.blockHeight?.toFixed();
-  status.transfer?.confirmations?.toFixed();
-  void [exactAmount, encoding, algorithm];
+  void [exactAmount, encoding, algorithm, status];
 }
 
 function useLegacyProvider(

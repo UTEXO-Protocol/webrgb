@@ -247,12 +247,6 @@ export interface RgbTransfer {
   status?: RgbTransferStatus;
   kind?: string;
   amount?: number;
-  /** Exact burn amount; use this instead of the legacy numeric amount. */
-  amountBaseUnits?: string;
-  /** Actual Bitcoin anchor height; null while unconfirmed or unknown. */
-  blockHeight?: number | null;
-  /** Observed Bitcoin confirmations, not the requested minimum. */
-  confirmations?: number;
   recipientId?: string;
   txid?: string;
   [key: string]: unknown;
@@ -340,7 +334,7 @@ export interface RgbProvider {
   sendAsset(args: RgbSendAssetArgs): Promise<RgbSendAssetResult>;
   /** Optional BFA burn extension; requires a separate wallet confirmation. */
   burnAsset?(args: RgbBurnAssetArgs): Promise<RgbBurnAssetResult>;
-  /** Optional retrieval of an existing burn proof, with consent to share it. */
+  /** Share a saved burn consignment for third-party verification, with consent. */
   getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
   listTransfers(assetId?: string): Promise<RgbTransferList>;
   getTransferStatus(
