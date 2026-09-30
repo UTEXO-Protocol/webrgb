@@ -15,13 +15,9 @@ The [upstream playground](https://kaleidoswap.github.io/webrgb/) imports the ups
 
 ## Install
 
-The renamed package is not published to npm yet. Install a local checkout:
-
 ```bash
-npm install /path/to/webrgb
+npm install @utexo/webrgb
 ```
-
-Use `@utexo/webrgb` in imports; the package name is independent of its folder.
 
 Importing anything from the package augments `Window`, so `window.rgb` is typed everywhere. For WebLN typings use `@webbtc/webln-types`; for NIP-07 use `nostr-tools`.
 
@@ -139,6 +135,8 @@ console.log(formatReport(await runConformance(window.rgb!)));
 The error crosses a `postMessage` boundary on its way out of the wallet, so what you catch is a plain `Error` carrying `code` — `instanceof` will not help. Use `isProviderError(err)`, or `providerErrorCode(err)` for a `switch` that must be total.
 
 ## Versioning
+
+`@utexo/webrgb` starts at `0.1.0` and is versioned independently of the upstream package.
 
 The declarations mirror `SPEC.md` and the extension's `src/injected.ts`. A method added to the provider lands here as a minor bump; a changed signature as a major bump. If the two disagree, trust the wallet and open an issue.
 

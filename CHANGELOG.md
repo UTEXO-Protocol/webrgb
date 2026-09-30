@@ -15,8 +15,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Rename the UTEXO fork to `@utexo/webrgb`. WalletConnect is maintained in the
-  separate `@utexo/webrgb-walletconnect` project.
+- Rename the UTEXO fork to `@utexo/webrgb`, starting at version `0.1.0`.
+  WalletConnect is maintained in the separate `@utexo/webrgb-walletconnect` project.
+
+The entries below describe upstream `@kaleidorg/webrgb` releases.
 
 ## [0.3.0] - 2026-09-26
 
