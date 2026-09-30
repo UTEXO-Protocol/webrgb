@@ -1,26 +1,74 @@
 name: Publish to npm
 
-# Publishes @utexo/webrgb to npm.
-#   - Automatically on a pushed version tag (e.g. `git tag v0.1.0 && git push --tags`).
-#   - Or manually via "Run workflow" (workflow_dispatch).
-# Uses the organisation-level NPM_TOKEN secret (an npm automation token with
-# publish rights to @utexo). The `npm` environment requires a reviewer to
-# approve the run before the token is exposed, so a stray tag cannot publish.
-
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
+      version:
+        description: "Release version (e.g. 0.1.0 or 0.1.0-beta.1)"
+        required: true
+        type: string
       dist_tag:
-        description: 'npm dist-tag (leave blank to auto: beta for prereleases, latest otherwise)'
+        description: "npm dist-tag (leave blank to auto: beta for prereleases, latest otherwise)"
         required: false
-        default: ''
+        default: ""
+
+permissions:
+  contents: write
 
 jobs:
-  publish:
+  resolve-version:
+    name: Resolve release version
     runs-on: ubuntu-latest
-    environment: npm
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      dist_tag: ${{ steps.resolve.outputs.dist_tag }}
+    steps:
+      - name: Resolve version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DIST_TAG: ${{ inputs.dist_tag }}
+        run: |
+          VERSION="$(echo "${INPUT_VERSION}" | sed -E 's/^[[:space:]]*v?//; s/[[:space:]]+$//')"
+          if [[ -z "${VERSION}" ]]; then
+            echo "Resolved version is empty. Provided input: '${INPUT_VERSION}'"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          if [[ -n "${INPUT_DIST_TAG}" ]]; then
+            DIST_TAG="${INPUT_DIST_TAG}"
+          elif printf '%s' "${VERSION}" | grep -q '-'; then
+            DIST_TAG="beta"
+          else
+            DIST_TAG="latest"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=${DIST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved: version=${VERSION} tag=${TAG} dist_tag=${DIST_TAG}"
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: resolve-version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Test
+        run: npm test
+
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [resolve-version, test]
     permissions:
       contents: read
       id-token: write
@@ -30,42 +78,39 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: "https://registry.npmjs.org"
           cache: npm
 
       - run: npm ci --no-audit --no-fund
 
-      # Never publish an untested build.
-      - name: Test
-        run: npm test
-
-      # A tag that does not match package.json is a mistake, not a release.
-      - name: Check tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          set -euo pipefail
-          VERSION="$(node -p "require('./package.json').version")"
-          TAG="${GITHUB_REF#refs/tags/v}"
-          [ "$TAG" = "$VERSION" ] || { echo "Tag v$TAG != package.json $VERSION" >&2; exit 64; }
-
-      - name: Resolve dist-tag
-        id: disttag
-        env:
-          INPUT_TAG: ${{ github.event.inputs.dist_tag }}
-        run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          if [ -n "$INPUT_TAG" ]; then
-            TAG="$INPUT_TAG"
-          elif printf '%s' "$VERSION" | grep -q '-'; then
-            TAG="beta"
-          else
-            TAG="latest"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Publishing $VERSION with dist-tag '$TAG'"
+      - name: Set version
+        run: npm version ${{ needs.resolve-version.outputs.version }} --no-git-tag-version
 
       - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DIST_TAG: ${{ steps.disttag.outputs.tag }}
-        run: npm publish --access public --provenance --tag "$DIST_TAG"
+        run: npm publish --access public --provenance --tag ${{ needs.resolve-version.outputs.dist_tag }}
+
+  github-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    needs: [resolve-version, publish]
+    permissions:
+      contents: write
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: v${{ needs.resolve-version.outputs.version }}
+          body: |
+            ## @utexo/webrgb v${{ needs.resolve-version.outputs.version }}
+
+            npm:
+            ```bash
+            npm install @utexo/webrgb@${{ needs.resolve-version.outputs.version }}
+            ```
+          draft: false
+          prerelease: ${{ contains(needs.resolve-version.outputs.version, 'alpha') || contains(needs.resolve-version.outputs.version, 'beta') || contains(needs.resolve-version.outputs.version, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
