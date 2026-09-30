@@ -1,13 +1,13 @@
 {
-  "name": "@kaleidorg/webrgb",
-  "version": "0.3.0",
+  "name": "@utexo/webrgb",
+  "version": "0.1.0",
   "description": "WebRGB: TypeScript declarations, discovery, a mock wallet and a conformance suite for the window.rgb provider injected by RGB wallets such as the KaleidoSwap extension.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kaleidoswap/webrgb.git"
+    "url": "git+https://github.com/UTEXO-Protocol/webrgb.git"
   },
-  "homepage": "https://github.com/kaleidoswap/webrgb#readme",
+  "homepage": "https://github.com/UTEXO-Protocol/webrgb#readme",
   "keywords": [
     "webrgb",
     "rgb",
@@ -28,6 +28,7 @@
     "conformance.d.ts",
     "README.md",
     "SPEC.md",
+    "INTEGRATION.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
@@ -64,7 +65,7 @@
     "./package.json": "./package.json"
   },
   "bugs": {
-    "url": "https://github.com/kaleidoswap/webrgb/issues"
+    "url": "https://github.com/UTEXO-Protocol/webrgb/issues"
   },
   "engines": {
     "node": ">=20"

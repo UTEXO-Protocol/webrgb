@@ -1,17 +1,22 @@
-# @kaleidorg/webrgb
+# @utexo/webrgb
 
 **WebRGB** is the `window.rgb` provider a wallet injects into web pages so a dApp can issue, receive, send and track [RGB](https://rgb.tech) assets, and pay or receive them over Lightning, without running its own RGB backend. It sits next to [WebLN](https://www.webln.dev/) (`window.webln`) and WebBTC (`window.webbtc`) and follows the same conventions: one `enable()` consent per origin, a confirmation in the wallet for every funds-touching call, and errors that carry a `code`.
 
 [`SPEC.md`](./SPEC.md) is the interface contract. The reference implementation is the [KaleidoSwap browser extension](https://docs.kaleidoswap.com/extensions/kaleidoswap-extension/dapp-connectivity) from 0.3.0 on. This package ships the TypeScript declarations, discovery, an in-memory mock wallet and a conformance suite.
 
+This is the UTEXO fork of [KaleidoSwap WebRGB](https://github.com/kaleidoswap/webrgb),
+renamed to `@utexo/webrgb`. See [INTEGRATION.md](./INTEGRATION.md) for dApp and
+wallet integration, including mint/burn examples. WalletConnect lives in the
+separate `@utexo/webrgb-walletconnect` project.
+
 ## Try it
 
-The [playground](https://kaleidoswap.github.io/webrgb/) imports this module and exercises every `window.rgb` method, with a live log of calls, results and error codes. Drive it against the extension with a signet or regtest wallet — or press **install mock wallet** and use it with nothing installed at all.
+The [upstream playground](https://kaleidoswap.github.io/webrgb/) imports the upstream module and exercises every `window.rgb` method, with a live log of calls, results and error codes. Drive it against the extension with a signet or regtest wallet — or press **install mock wallet** and use it with nothing installed at all.
 
 ## Install
 
 ```bash
-npm install @kaleidorg/webrgb
+npm install @utexo/webrgb
 ```
 
 Importing anything from the package augments `Window`, so `window.rgb` is typed everywhere. For WebLN typings use `@webbtc/webln-types`; for NIP-07 use `nostr-tools`.
@@ -19,7 +24,7 @@ Importing anything from the package augments `Window`, so `window.rgb` is typed 
 ## Usage
 
 ```ts
-import { requestProvider, isProviderError, supports, toAssetArray } from "@kaleidorg/webrgb";
+import { requestProvider, isProviderError, supports, toAssetArray } from "@utexo/webrgb";
 
 try {
   // Waits for the wallet if the page ran first; `enable` connects the origin.
@@ -53,6 +58,7 @@ try {
 | `issueAsset(args)` | Mint a new asset (gated by its own wallet capability) |
 | `listAssets()` / `getAssetBalance(id)` | Holdings |
 | `sendAsset(args)` | Send against an RGB invoice, or explicitly |
+| `burnAsset(args)` / `getConsignment(args)` | Optional BFA burn and consignment sharing for third-party proof verification (UTEXO proposal) |
 | `listTransfers(id?)` / `getTransferStatus(id)` | Transfer history and status |
 | `decodeRgbInvoice(invoice)` | What an invoice asks for, before you pay it — read-only, no prompt |
 | `makeLnInvoice(args)` / `payLnInvoice(args)` | RGB over Lightning; listed in `methods` only when the wallet has a Lightning node |
@@ -67,7 +73,7 @@ Feature-detect with `supports(info, method)` rather than assuming a method exist
 `window.rgb` is a single slot, so two installed wallets cannot both own it. Wallets also announce themselves, EIP-6963 style, and `listProviders()` collects the answers:
 
 ```ts
-import { listProviders } from "@kaleidorg/webrgb";
+import { listProviders } from "@utexo/webrgb";
 
 for (const { info, provider } of await listProviders()) {
   console.log(info.name, info.rdns); // show a picker, then use `provider`
@@ -79,7 +85,7 @@ for (const { info, provider } of await listProviders()) {
 Wallet side, one call joins discovery:
 
 ```ts
-import { announceProvider } from "@kaleidorg/webrgb";
+import { announceProvider } from "@utexo/webrgb";
 
 announceProvider({
   info: { uuid: crypto.randomUUID(), name: "Example", rdns: "com.example.wallet" },
@@ -89,10 +95,10 @@ announceProvider({
 
 ## Building without a wallet
 
-`@kaleidorg/webrgb/mock` is an in-memory provider that enforces the same rules a real one does — `NOT_ENABLED` before `enable()`, `METHOD_NOT_SUPPORTED` for anything absent from `getInfo().methods`, a confirmation step you can make refuse:
+`@utexo/webrgb/mock` is an in-memory provider that enforces the same rules a real one does — `NOT_ENABLED` before `enable()`, `METHOD_NOT_SUPPORTED` for anything absent from `getInfo().methods`, a confirmation step you can make refuse:
 
 ```ts
-import { createMockProvider, installMockProvider } from "@kaleidorg/webrgb/mock";
+import { createMockProvider, installMockProvider } from "@utexo/webrgb/mock";
 
 // In a test:
 const rgb = createMockProvider({ protocol: "RGB_LN", assets: [{ id: "rgb:x", balance: 100 }] });
@@ -107,10 +113,10 @@ const { uninstall } = installMockProvider();
 
 ## Conformance
 
-`@kaleidorg/webrgb/conformance` checks a live wallet against `SPEC.md` using read-only calls only, so it raises no confirmation:
+`@utexo/webrgb/conformance` checks a live wallet against `SPEC.md` using read-only calls only, so it raises no confirmation:
 
 ```ts
-import { runConformance, formatReport } from "@kaleidorg/webrgb/conformance";
+import { runConformance, formatReport } from "@utexo/webrgb/conformance";
 
 console.log(formatReport(await runConformance(window.rgb!)));
 ```
@@ -129,6 +135,8 @@ console.log(formatReport(await runConformance(window.rgb!)));
 The error crosses a `postMessage` boundary on its way out of the wallet, so what you catch is a plain `Error` carrying `code` — `instanceof` will not help. Use `isProviderError(err)`, or `providerErrorCode(err)` for a `switch` that must be total.
 
 ## Versioning
+
+`@utexo/webrgb` starts at `0.1.0` and is versioned independently of the upstream package.
 
 The declarations mirror `SPEC.md` and the extension's `src/injected.ts`. A method added to the provider lands here as a minor bump; a changed signature as a major bump. If the two disagree, trust the wallet and open an issue.
 

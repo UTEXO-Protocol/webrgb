@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
@@ -50,20 +50,20 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund "./$TGZ"
           node --input-type=module -e "
-            const m = await import('@kaleidorg/webrgb');
+            const m = await import('@utexo/webrgb');
             if (typeof m.requestProvider !== 'function') throw new Error('requestProvider missing');
             await m.requestProvider().then(
               () => { throw new Error('resolved outside a browser'); },
               (err) => { if (err.code !== 'METHOD_NOT_SUPPORTED') throw err; },
             );
-            const { createMockProvider } = await import('@kaleidorg/webrgb/mock');
-            const { runConformance } = await import('@kaleidorg/webrgb/conformance');
+            const { createMockProvider } = await import('@utexo/webrgb/mock');
+            const { runConformance } = await import('@utexo/webrgb/conformance');
             const report = await runConformance(createMockProvider());
             if (!report.ok) throw new Error('the mock is not conformant: ' + JSON.stringify(report));
             console.log('OK: every subpath imports in bare Node and refuses politely without a window');
           "
           for f in index.d.ts mock.d.ts conformance.d.ts SPEC.md; do
-            test -f "node_modules/@kaleidorg/webrgb/$f"
+            test -f "node_modules/@utexo/webrgb/$f"
           done
 
       - name: Audit dependencies (high+)

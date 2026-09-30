@@ -11,18 +11,21 @@ import {
   supports,
   toAssetArray,
   toTransferArray,
-} from "@kaleidorg/webrgb";
+} from "@utexo/webrgb";
 import type {
   ProviderError,
   ProviderErrorCode,
   RgbAsset,
+  RgbBurnAssetArgs,
+  RgbGetConsignmentResult,
+  RgbProvider,
   RgbProviderDetail,
   RgbTransfer,
-} from "@kaleidorg/webrgb";
-import { createMockProvider, installMockProvider } from "@kaleidorg/webrgb/mock";
-import type { MockRgbProvider } from "@kaleidorg/webrgb/mock";
-import { formatReport, runConformance } from "@kaleidorg/webrgb/conformance";
-import type { ConformanceReport } from "@kaleidorg/webrgb/conformance";
+} from "@utexo/webrgb";
+import { createMockProvider, installMockProvider } from "@utexo/webrgb/mock";
+import type { MockRgbProvider } from "@utexo/webrgb/mock";
+import { formatReport, runConformance } from "@utexo/webrgb/conformance";
+import type { ConformanceReport } from "@utexo/webrgb/conformance";
 
 async function useRgb(): Promise<void> {
   if (!window.rgb) return;
@@ -71,6 +74,51 @@ async function useRgb(): Promise<void> {
   await window.rgb.sendAsset({ assetId: "rgb:x" });
   // @ts-expect-error a wrapped list is not an array until it is narrowed
   (await window.rgb.listAssets()).map((a: RgbAsset) => a.id);
+}
+
+async function useBurn(provider: RgbProvider): Promise<void> {
+  const info = await provider.getInfo();
+  if (!supports(info, "burnAsset") || !supports(info, "getConsignment") ||
+      !provider.burnAsset || !provider.getConsignment) return;
+
+  const args: RgbBurnAssetArgs = {
+    network: info.network,
+    assetId: "rgb:bfa",
+    amount: "18446744073709551615",
+    burnRecipient: { chainId: "eip155:31337", address: `0x${"11".repeat(20)}` },
+    feeRate: 2,
+    minConfirmations: 3,
+  };
+  // @ts-expect-error burn amounts must preserve all u64 digits as a string
+  const imprecise: RgbBurnAssetArgs = { ...args, amount: 9007199254740993 };
+  // @ts-expect-error a recipient must name its EVM chain as well as its address
+  const noChain: RgbBurnAssetArgs = { ...args, burnRecipient: { address: "0x11" } };
+  void [imprecise, noChain];
+
+  const burn = await provider.burnAsset(args);
+  const exactAmount: string = burn.amount;
+  burn.minConfirmations.toFixed();
+  const proof: RgbGetConsignmentResult = await provider.getConsignment({
+    assetId: burn.assetId, txid: burn.txid,
+  });
+  const encoding: "base64" = proof.encoding;
+  const algorithm: "keccak256" = proof.digest.algorithm;
+  // @ts-expect-error retrieval requires both assetId and txid
+  await provider.getConsignment({ txid: burn.txid });
+  // @ts-expect-error chunk offsets belong to the transport, not the public method
+  await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid, offset: 0 });
+  const status = await provider.getTransferStatus(burn.transferId, burn.assetId);
+  void [exactAmount, encoding, algorithm, status];
+}
+
+function useLegacyProvider(
+  legacy: Omit<RgbProvider, "burnAsset" | "getConsignment">,
+  args: RgbBurnAssetArgs,
+): void {
+  // Adding the extension must not require an existing wallet to implement it.
+  const compatible: RgbProvider = legacy;
+  // @ts-expect-error optional methods need a presence check
+  compatible.burnAsset(args);
 }
 
 async function useDiscovery(): Promise<void> {
@@ -151,6 +199,8 @@ window.addEventListener("rgb:announceProvider", (e) => {
 });
 
 void useRgb;
+void useBurn;
+void useLegacyProvider;
 void useDiscovery;
 void useWalletSide;
 void handle;

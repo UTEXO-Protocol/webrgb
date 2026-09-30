@@ -1,5 +1,5 @@
 /**
- * Runtime half of @kaleidorg/webrgb. Types live in index.d.ts.
+ * Runtime half of @utexo/webrgb. Types live in index.d.ts.
  *
  * No imports: the GitHub Pages playground serves this file as-is.
  */

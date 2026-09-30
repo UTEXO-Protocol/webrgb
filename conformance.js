@@ -1,5 +1,5 @@
 /**
- * Runtime half of @kaleidorg/webrgb/conformance. Types live in conformance.d.ts.
+ * Runtime half of @utexo/webrgb/conformance. Types live in conformance.d.ts.
  */
 
 import { providerErrorCode, supports, toAssetArray, toTransferArray } from "./index.js";
@@ -130,6 +130,15 @@ export async function runConformance(provider, options = {}) {
       assert(listed.length === 0, `non-RGB_LN wallet lists ${listed.join(", ")}`);
     }
   });
+
+  // An optional method may be absent. Inspect advertised functions without
+  // invoking them: a burn moves funds, and proof retrieval can disclose history.
+  for (const method of /** @type {const} */ (["burnAsset", "getConsignment"])) {
+    await check(`${method}-available`, () => {
+      if (!info || !supports(info, method)) return `the wallet does not serve ${method}`;
+      assert(typeof provider[method] === "function", `${method} is advertised but missing`);
+    });
+  }
 
   await check("getAddress-shape", async () => {
     const result = await provider.getAddress();

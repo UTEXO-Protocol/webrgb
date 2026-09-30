@@ -1,5 +1,5 @@
 /**
- * Runtime half of @kaleidorg/webrgb/mock. Types live in mock.d.ts.
+ * Runtime half of @utexo/webrgb/mock. Types live in mock.d.ts.
  */
 
 import { announceProvider } from "./index.js";

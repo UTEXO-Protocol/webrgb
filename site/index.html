@@ -114,7 +114,7 @@
   <body>
     <header>
       <h1>WebRGB <span>Playground</span></h1>
-      <a href="https://github.com/kaleidoswap/webrgb">github.com/kaleidoswap/webrgb</a>
+      <a href="https://github.com/UTEXO-Protocol/webrgb">github.com/UTEXO-Protocol/webrgb</a>
       <a href="https://docs.kaleidoswap.com/extensions/kaleidoswap-extension/dapp-connectivity">docs</a>
       <span class="pill" id="pill"><span class="dot"></span>window.rgb</span>
     </header>
@@ -124,7 +124,7 @@
         <section>
           <h2>Setup</h2>
           <p class="note">
-            This page imports the published <code>@kaleidorg/webrgb</code> module from this same
+            This page imports the <code>@utexo/webrgb</code> module from this same
             deployment and drives whatever <code>window.rgb</code> a wallet injects. Install the
             KaleidoSwap browser extension, unlock it, then press <code>requestProvider()</code>.
             Every funds-touching call opens the wallet's confirmation popup; nothing here talks to a
@@ -144,7 +144,7 @@
             <code>listProviders()</code> asks every installed wallet to announce itself, so a page
             can offer a picker instead of racing for the single <code>window.rgb</code> slot.
             <code>runConformance()</code> checks this wallet against
-            <a href="https://github.com/kaleidoswap/webrgb/blob/main/SPEC.md">SPEC.md</a> using
+            <a href="https://github.com/UTEXO-Protocol/webrgb/blob/dev/SPEC.md">SPEC.md</a> using
             read-only calls only — it raises no confirmation. No wallet installed? Install the
             in-memory mock and the whole page works without one.
           </p>

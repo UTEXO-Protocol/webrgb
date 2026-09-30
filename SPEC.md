@@ -2,6 +2,8 @@
 
 **Status:** draft, version 1. The interface is implemented by the KaleidoSwap
 browser extension ≥ 0.3.0 and described by `index.d.ts` in this repository.
+The optional burn methods below are UTEXO proposals, not part of that
+reference implementation.
 
 A **wallet** injects a provider into a web page. A **dApp** calls it to issue,
 receive, send and track [RGB](https://rgb.tech) assets, and to pay or receive
@@ -13,8 +15,9 @@ conventions.
 
 ## 1. Installing a provider
 
-A wallet MUST expose the provider object as `window.rgb` and MUST dispatch a
-`rgb:ready` `CustomEvent` on `window` once it is installed:
+For browser injection, a wallet MUST expose the provider object as
+`window.rgb` and MUST dispatch a `rgb:ready` `CustomEvent` on `window` once
+it is installed:
 
 ```js
 window.rgb = provider;
@@ -26,6 +29,10 @@ A page may run before or after the wallet, so a dApp MUST handle both orders —
 
 `window.rgb` is a single slot. A wallet SHOULD NOT overwrite a provider another
 wallet installed; it MUST still announce itself (§2) so the page can choose.
+
+A remote wallet MAY expose the same interface through a transport adapter.
+The dApp then uses a local provider object; browser injection and discovery
+are not required. Connection and method consent still apply.
 
 ## 2. Discovery
 
@@ -70,6 +77,8 @@ Beyond the connection, consent is per call:
 | `blindReceive` | MUST | Creates an invoice that binds a UTXO |
 | `issueAsset` | MUST | Mints; MAY also require a separate wallet capability |
 | `sendAsset` | MUST | Moves assets |
+| `burnAsset` | MUST | Burns assets |
+| `getConsignment` | MUST unless already approved | Shares a consignment with a third party to verify a burn proof |
 | `makeLnInvoice`, `payLnInvoice` | MUST | Moves, or commits to receiving, assets over Lightning |
 
 A prompt the user dismisses MUST reject with `USER_REJECTED`.
@@ -87,7 +96,9 @@ around them.
   methods the wallet will serve. A method absent from it MUST reject with
   `METHOD_NOT_SUPPORTED`; a method present in it MUST NOT. `makeLnInvoice` and
   `payLnInvoice` MUST appear only when `protocol` is `"RGB_LN"`, and
-  `issueAsset` only when the runtime can mint.
+  `issueAsset` only when the runtime can mint. `burnAsset` and `getConsignment`
+  are optional and MAY be absent from the provider object when unsupported;
+  dApps MUST check both the method list and their presence.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
 - **`blindReceive({ assetId?, amount?, minConfirmations?, … })`** returns an
@@ -111,6 +122,21 @@ around them.
   A wallet MAY refuse `{ invoice }` for an any-amount invoice, since nothing
   in the request fixes what leaves the wallet; it MUST then reject with
   `INVALID_PARAMS`, and the explicit form is how a page pays one.
+- **`burnAsset({ network, assetId, amount, burnRecipient, … })`** burns a BFA
+  (bridged fungible asset) and returns `txid` and `transferId` after broadcast.
+  `amount` is a positive u64 decimal string in base units; `network` MUST
+  match the connected RGB network. `burnRecipient` identifies the EVM chain
+  and address. The wallet MUST validate the bridge route and show the asset,
+  amount, destination and Bitcoin fee in its confirmation. A dApp MUST NOT
+  automatically repeat a burn after a timeout.
+- **`getConsignment({ assetId, txid })`** returns the saved burn consignment
+  as Base64, with its byte length and digest as defined in `index.d.ts`.
+  The consignment can be shared with a third party, such as a bridge, to
+  verify the burn proof. The wallet MUST obtain consent to share this proof
+  with the requesting dApp and explain that it may be forwarded to a third
+  party; consent already given for that proof and dApp MAY be reused until
+  revoked. The result MUST contain the proof bytes, not a local file path,
+  and retrieval MUST NOT perform another burn.
 - **`listAssets()`** and **`listTransfers(assetId?)`** MUST return arrays.
   (Wallets that wrap them exist; `toAssetArray` / `toTransferArray` in this
   package tolerate that, and the conformance suite reports it.)
@@ -173,20 +199,21 @@ has not been enabled.
 
 ## 7. Conformance
 
-`@kaleidorg/webrgb/conformance` runs the read-only half of this document
+`@utexo/webrgb/conformance` runs the read-only half of this document
 against a live provider:
 
 ```js
-import { runConformance, formatReport } from "@kaleidorg/webrgb/conformance";
+import { runConformance, formatReport } from "@utexo/webrgb/conformance";
 console.log(formatReport(await runConformance(window.rgb)));
 ```
 
 It never issues, sends or creates an invoice, so it raises no confirmation and
-costs nothing to run against a funded wallet.
+costs nothing to run against a funded wallet. It checks advertised burn
+methods without calling `burnAsset()` or sharing a consignment.
 
 ## 8. Changes
 
 This document and `index.d.ts` version together. A method added to the
 interface is a minor version of the package; a changed signature is a major
 one. Where a wallet and this document disagree, the wallet is what pages see —
-[open an issue](https://github.com/kaleidoswap/webrgb/issues).
+[open an issue](https://github.com/UTEXO-Protocol/webrgb/issues).

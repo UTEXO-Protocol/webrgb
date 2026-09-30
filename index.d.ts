@@ -70,6 +70,8 @@ export type RgbMethod =
   | "listAssets"
   | "getAssetBalance"
   | "sendAsset"
+  | "burnAsset"
+  | "getConsignment"
   | "listTransfers"
   | "getTransferStatus"
   | "decodeRgbInvoice"
@@ -190,6 +192,55 @@ export interface RgbSendAssetResult {
   [key: string]: unknown;
 }
 
+/** EVM destination for a BFA burn; the chain is checked separately from the address. */
+export interface RgbBurnRecipient {
+  chainId: `eip155:${number}`;
+  /** 20-byte hex address, with a 0x prefix. */
+  address: `0x${string}`;
+}
+
+export interface RgbBurnAssetArgs {
+  /** Expected RGB network, checked against getInfo().network. */
+  network: string;
+  assetId: string;
+  /** Positive base-unit decimal integer, at most 18446744073709551615 (u64). */
+  amount: string;
+  burnRecipient: RgbBurnRecipient;
+  /** sat/vB; the wallet validates its backend's supported range. */
+  feeRate?: number;
+  minConfirmations?: number;
+}
+
+/** Returned after broadcast; it does not report an EVM payout. */
+export interface RgbBurnAssetResult {
+  transferId: string | number;
+  txid: string;
+  assetId: string;
+  amount: string;
+  burnRecipient: RgbBurnRecipient;
+  status: RgbTransferStatus;
+  /** Confirmations the wallet will wait for, as shown in the prompt. */
+  minConfirmations: number;
+}
+
+export interface RgbGetConsignmentArgs {
+  assetId: string;
+  /** Bitcoin transaction id of the burn, as 64 hex characters. */
+  txid: string;
+}
+
+export interface RgbGetConsignmentResult {
+  assetId: string;
+  txid: string;
+  encoding: "base64";
+  /** Complete proof bytes as standard padded Base64, without a data: prefix. */
+  data: string;
+  /** Length of the decoded bytes. */
+  byteLength: number;
+  /** Keccak-256 of the decoded bytes; value is 0x followed by 64 hex characters. */
+  digest: { algorithm: "keccak256"; value: `0x${string}` };
+}
+
 export interface RgbTransfer {
   assetId?: string;
   transferId?: string | number;
@@ -281,6 +332,10 @@ export interface RgbProvider {
   listAssets(): Promise<RgbAssetList>;
   getAssetBalance(assetId: string): Promise<RgbAssetBalance>;
   sendAsset(args: RgbSendAssetArgs): Promise<RgbSendAssetResult>;
+  /** Optional BFA burn extension; requires a separate wallet confirmation. */
+  burnAsset?(args: RgbBurnAssetArgs): Promise<RgbBurnAssetResult>;
+  /** Share a saved burn consignment for third-party verification, with consent. */
+  getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
   listTransfers(assetId?: string): Promise<RgbTransferList>;
   getTransferStatus(
     transferId: string | number,

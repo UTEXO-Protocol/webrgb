@@ -1,10 +1,10 @@
 name: Publish to npm
 
-# Publishes @kaleidorg/webrgb to npm.
+# Publishes @utexo/webrgb to npm.
 #   - Automatically on a pushed version tag (e.g. `git tag v0.1.0 && git push --tags`).
 #   - Or manually via "Run workflow" (workflow_dispatch).
 # Uses the organisation-level NPM_TOKEN secret (an npm automation token with
-# publish rights to @kaleidorg). The `npm` environment requires a reviewer to
+# publish rights to @utexo). The `npm` environment requires a reviewer to
 # approve the run before the token is exposed, so a stray tag cannot publish.
 
 on:

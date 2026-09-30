@@ -500,6 +500,51 @@ describe("conformance", () => {
     assert.equal(report.ok, true, formatReport(report));
   });
 
+  it("allows a provider without the optional BFA methods", async () => {
+    const rgb = createMockProvider();
+    const report = await runConformance(rgb);
+    assert.equal(report.ok, true, formatReport(report));
+    for (const method of ["burnAsset", "getConsignment"]) {
+      assert.equal(supports(await rgb.getInfo(), method), false);
+      assert.equal(rgb[method], undefined);
+      assert.equal(report.checks.find((c) => c.name === `${method}-available`)?.status, "skip");
+    }
+  });
+
+  it("checks advertised BFA methods without burning or sharing a proof", async () => {
+    const rgb = createMockProvider();
+    const getInfo = rgb.getInfo.bind(rgb);
+    rgb.getInfo = async () => {
+      const info = await getInfo();
+      return { ...info, methods: [...info.methods, "burnAsset", "getConsignment"] };
+    };
+    let sensitiveCalls = 0;
+    rgb.burnAsset = rgb.getConsignment = async () => {
+      sensitiveCalls++;
+      throw new Error("Conformance must never call a sensitive method");
+    };
+    const report = await runConformance(rgb);
+    assert.equal(report.ok, true, formatReport(report));
+    assert.equal(sensitiveCalls, 0);
+    for (const method of ["burnAsset", "getConsignment"]) {
+      assert.equal(report.checks.find((c) => c.name === `${method}-available`)?.status, "pass");
+    }
+  });
+
+  it("catches an advertised BFA method missing from the provider", async () => {
+    const rgb = createMockProvider();
+    const getInfo = rgb.getInfo.bind(rgb);
+    rgb.getInfo = async () => {
+      const info = await getInfo();
+      return { ...info, methods: [...info.methods, "burnAsset", "getConsignment"] };
+    };
+    const report = await runConformance(rgb);
+    assert.equal(report.ok, false);
+    for (const method of ["burnAsset", "getConsignment"]) {
+      assert.equal(report.checks.find((c) => c.name === `${method}-available`)?.status, "fail");
+    }
+  });
+
   it("catches a wallet that wraps its lists", async () => {
     const rgb = createMockProvider();
     const wrapping = Object.create(rgb);
