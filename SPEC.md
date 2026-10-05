@@ -2,8 +2,8 @@
 
 **Status:** draft, version 1. The interface is implemented by the KaleidoSwap
 browser extension ≥ 0.3.0 and described by `index.d.ts` in this repository.
-The optional burn methods below are UTEXO proposals, not part of that
-reference implementation.
+The `burnAsset` and `getConsignment` methods below are optional BFA extensions
+provided by this fork; they are not part of that reference implementation.
 
 A **wallet** injects a provider into a web page. A **dApp** calls it to issue,
 receive, send and track [RGB](https://rgb.tech) assets, and to pay or receive
