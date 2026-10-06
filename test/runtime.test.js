@@ -2,6 +2,8 @@
 // are checked separately by tsc; these tests are what the .d.ts cannot prove:
 // that discovery settles, times out, and cleans up after itself.
 import assert from "node:assert/strict";
+import { createHash, createPublicKey, verify } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { after, afterEach, describe, it } from "node:test";
 
 import {
@@ -441,7 +443,127 @@ describe("mock provider", () => {
   });
 });
 
+describe("message signing", () => {
+  // LDK's sign/recover test vector; no mock key is shipped with the provider.
+  const signature = "d9tibmnic9t5y41hg7hkakdcra94akas9ku3rmmj4ag9mritc8ok4p5qzefs78c9pqfhpuftqqzhydbdwfg7u6w6wdxcqpqn4sj4e73e";
+
+  it("the documented LDK vector verifies with Node's independent ECDSA implementation", () => {
+    const spec = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
+    const message = spec.match(/^message: (.+)$/m)[1];
+    const encoded = spec.match(/^signature: (.+)$/m)[1];
+    const publicKey = spec.match(/^recovered public key \(compressed hex\): (.+)$/m)[1];
+    const alphabet = "ybndrfg8ejkmcpqxot1uwisza345h769";
+    const bytes = [];
+    let bits = 0, value = 0;
+    for (const character of encoded) {
+      const digit = alphabet.indexOf(character);
+      assert.ok(digit >= 0, "invalid zbase32 character");
+      value = (value << 5) | digit;
+      bits += 5;
+      if (bits >= 8) {
+        bits -= 8;
+        bytes.push((value >>> bits) & 255);
+        value &= (1 << bits) - 1;
+      }
+    }
+    assert.equal(bytes.length, 65);
+    assert.ok(bytes[0] >= 31 && bytes[0] <= 34);
+    const key = createPublicKey({
+      key: Buffer.from("3036301006072a8648ce3d020106052b8104000a032200" + publicKey, "hex"),
+      format: "der",
+      type: "spki",
+    });
+    const check = (text) => verify(
+      "sha256", // Node supplies the second SHA256 round.
+      createHash("sha256").update("Lightning Signed Message:" + text, "utf8").digest(),
+      { key, dsaEncoding: "ieee-p1363" },
+      Buffer.from(bytes.slice(1)),
+    );
+    assert.equal(check(message), true);
+    assert.equal(check(message + " "), false);
+  });
+
+  it("is opt-in and does not require a Lightning runtime", async () => {
+    const unsupported = createMockProvider();
+    await unsupported.enable();
+    assert.equal(supports(await unsupported.getInfo(), "signMessage"), false);
+    await assert.rejects(unsupported.signMessage("test message"), { code: "METHOD_NOT_SUPPORTED" });
+
+    const rgb = createMockProvider({
+      protocol: "RGB_L1",
+      signMessage: async (message) => {
+        assert.equal(message, "test message");
+        return { signature };
+      },
+    });
+    await assert.rejects(rgb.signMessage("test message"), { code: "NOT_ENABLED" });
+    await rgb.enable();
+    assert.equal(supports(await rgb.getInfo(), "signMessage"), true);
+    assert.deepEqual(await rgb.signMessage("test message"), { signature });
+  });
+
+  it("preserves whitespace, Unicode and empty messages", async () => {
+    const seen = [];
+    const rgb = createMockProvider({
+      signMessage: async (message) => {
+        seen.push(message);
+        return { signature };
+      },
+    });
+    await rgb.enable();
+    const messages = ["  sign in\r\n", "Підпис 🟠 e\u0301", ""];
+    for (const message of messages) await rgb.signMessage(message);
+    assert.deepEqual(seen, messages);
+  });
+
+  it("rejects malformed messages before confirmation or signing", async () => {
+    const rgb = createMockProvider({
+      rejectConfirmations: true,
+      signMessage: async () => { throw new Error("signer must not run"); },
+    });
+    await rgb.enable();
+    for (const message of [undefined, null, 1, { message: "hello" }, "\ud800", "\udc00"]) {
+      await assert.rejects(rgb.signMessage(message), { code: "INVALID_PARAMS" });
+    }
+    await assert.rejects(rgb.signMessage("hello"), { code: "USER_REJECTED" });
+  });
+
+  it("does not sign on enable or when the method is disabled", async () => {
+    let signed = 0;
+    const rgb = createMockProvider({
+      methods: ["enable", "getInfo"],
+      signMessage: async () => { signed++; return { signature }; },
+    });
+    await rgb.enable();
+    await rgb.enable();
+    await assert.rejects(rgb.signMessage("test message"), { code: "METHOD_NOT_SUPPORTED" });
+    assert.equal(signed, 0);
+  });
+});
+
 describe("conformance", () => {
+  it("checks message-signing support without requesting a signature", async () => {
+    const rgb = createMockProvider({
+      signMessage: async () => { throw new Error("conformance must not sign"); },
+    });
+    const report = await runConformance(rgb);
+    assert.equal(report.ok, true, formatReport(report));
+    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "pass");
+    assert.equal(rgb.calls.some((call) => call.method === "signMessage"), false);
+
+    delete rgb.signMessage;
+    const missing = await runConformance(rgb);
+    assert.equal(missing.checks.find((c) => c.name === "signMessage-available")?.status, "fail");
+  });
+
+  it("accepts wallets without message signing", async () => {
+    const rgb = createMockProvider();
+    delete rgb.signMessage;
+    const report = await runConformance(rgb);
+    assert.equal(report.ok, true, formatReport(report));
+    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "skip");
+  });
+
   it("passes a conforming wallet", async () => {
     const rgb = createMockProvider({ assets: [{ id: "rgb:a", ticker: "A", balance: 7 }] });
     const report = await runConformance(rgb);

@@ -3,7 +3,7 @@
 WebRGB defines the calls between a dApp and a wallet. The dApp uses a
 `RgbProvider`; the wallet implements its methods and handles user consent.
 Browser extensions and mobile wallets use the same method signatures.
-The BFA methods below are additions in this UTEXO fork.
+The BFA methods and message signing below are additions in this UTEXO fork.
 
 ## For dApp developers
 
@@ -49,6 +49,23 @@ and any payout. Track the burn with
 retried using the saved txid. If a burn times out, check wallet history before
 requesting another burn.
 
+For message signing, check support and pass the exact message your backend
+expects:
+
+```ts
+if (!supports(await provider.getInfo(), "signMessage") || !provider.signMessage) {
+  throw new Error("This wallet does not support message signing");
+}
+const { signature } = await provider.signMessage(message);
+```
+
+Send the signature to your backend. It verifies the original message using
+the [LND-compatible format](./SPEC.md#message-signature-format) and recovers
+the signing public key. For an existing account, compare it with that
+account's key. A login challenge should include the domain, a one-time nonce
+and expiry, checked by the backend. Connecting or minting does not require
+message signing.
+
 ## For wallet developers
 
 Implement the methods in [SPEC.md](./SPEC.md) in your wallet app. For example,
@@ -60,4 +77,12 @@ Map its arguments, results and errors to WebRGB.
 An extension injects this provider and joins discovery (§1–2 in the spec).
 A mobile wallet attaches it to a transport adapter. Keep access scoped to the
 approved dApp. Connection approval does not approve a burn or the sharing of
-a consignment; each method follows the consent rules in the specification.
+a consignment or message signing; each method follows the consent rules in
+the specification.
+
+For `signMessage`, show the origin, complete message and signing account,
+then obtain approval and check that the origin is still authorized before
+signing. Map your backend's signature field to `{ signature }` without
+changing its zbase32 encoding. Backends that trim messages must be adapted
+to sign the original UTF-8 bytes. Advertise the method only when your signer
+supports the specified format; no Lightning node is required.

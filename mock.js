@@ -44,8 +44,11 @@ export function createMockProvider(options = {}) {
   const autoEnable = options.autoEnable ?? true;
   const latencyMs = options.latencyMs ?? 0;
   const minConfirmationsFloor = options.minConfirmationsFloor ?? 1;
-  const methods =
-    options.methods ?? (protocol === "RGB_LN" ? [...BASE_METHODS, ...LN_METHODS] : BASE_METHODS);
+  const methods = options.methods ?? [
+    ...BASE_METHODS,
+    ...(protocol === "RGB_LN" ? LN_METHODS : []),
+    ...(options.signMessage ? ["signMessage"] : []),
+  ];
 
   /** @type {Map<string, { asset: import("./index.js").RgbAsset, balance: number }>} */
   const assets = new Map();
@@ -127,6 +130,17 @@ export function createMockProvider(options = {}) {
     async getAddress() {
       await call("getAddress", []);
       return { address: `bcrt1qmock${String(nextId()).padStart(6, "0")}` };
+    },
+
+    /** @param {string} message */
+    async signMessage(message) {
+      await call("signMessage", [message]);
+      if (!options.signMessage) throw fail("No message signer configured", "METHOD_NOT_SUPPORTED");
+      if (typeof message !== "string" || /[\uD800-\uDFFF]/u.test(message)) {
+        throw fail("message must be a well-formed Unicode string", "INVALID_PARAMS");
+      }
+      confirm();
+      return options.signMessage(message);
     },
 
     /** @param {import("./index.js").RgbBlindReceiveArgs} [args] */

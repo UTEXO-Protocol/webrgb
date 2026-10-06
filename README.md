@@ -54,6 +54,7 @@ try {
 |--------|---------|
 | `enable()` / `getInfo()` | Connect the origin; learn network, runtime and served methods |
 | `getAddress()` | Bitcoin address that anchors the wallet's RGB state |
+| `signMessage(message)` | Optional LND-compatible message signature, with per-call confirmation |
 | `blindReceive(args?)` | Blinded-UTXO receive invoice; omit `assetId` for any asset, including one the wallet has never held |
 | `issueAsset(args)` | Mint a new asset (gated by its own wallet capability) |
 | `listAssets()` / `getAssetBalance(id)` | Holdings |
@@ -64,7 +65,9 @@ try {
 | `makeLnInvoice(args)` / `payLnInvoice(args)` | RGB over Lightning; listed in `methods` only when the wallet has a Lightning node |
 | `on` / `off` | `transferReceived` and `transferSettled` events |
 
-Feature-detect with `supports(info, method)` rather than assuming a method exists: a node-less wallet rejects the Lightning methods with `METHOD_NOT_SUPPORTED`.
+Feature-detect with `supports(info, method)` rather than assuming a method exists:
+a node-less wallet rejects Lightning payments with `METHOD_NOT_SUPPORTED`, but
+may support `signMessage`. Optional methods also need a presence check.
 
 `listAssets()` and `listTransfers()` are typed wide because wallets differ on whether they wrap the array — pass them through `toAssetArray()` / `toTransferArray()`.
 
@@ -110,6 +113,11 @@ expect(rgb.calls.map((c) => c.method)).toContain("sendAsset");
 // In a dev build: put it on window.rgb and let the app find it as usual.
 const { uninstall } = installMockProvider();
 ```
+
+To exercise message signing in the mock, supply a `signMessage` callback to
+`createMockProvider`. It receives the unchanged message after access,
+argument and confirmation checks. Without it, signing is unsupported;
+the mock does not generate cryptographic signatures.
 
 ## Conformance
 

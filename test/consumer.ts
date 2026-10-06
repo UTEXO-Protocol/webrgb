@@ -18,6 +18,7 @@ import type {
   RgbAsset,
   RgbBurnAssetArgs,
   RgbGetConsignmentResult,
+  RgbSignMessageResult,
   RgbProvider,
   RgbProviderDetail,
   RgbTransfer,
@@ -111,8 +112,24 @@ async function useBurn(provider: RgbProvider): Promise<void> {
   void [exactAmount, encoding, algorithm, status];
 }
 
+async function useSignMessage(provider: RgbProvider): Promise<void> {
+  // @ts-expect-error optional signing needs a presence check
+  await provider.signMessage("test message");
+  if (!supports(await provider.getInfo(), "signMessage") || !provider.signMessage) return;
+  const signed: RgbSignMessageResult = await provider.signMessage("test message");
+  const signature: string = signed.signature;
+  // @ts-expect-error the method accepts the message directly, without a scheme
+  await provider.signMessage({ message: "test message", scheme: "lightning" });
+  // @ts-expect-error a result contains the signature, not a separate public key
+  signed.publicKey;
+  // @ts-expect-error backend-specific field names do not cross the provider boundary
+  const native: RgbSignMessageResult = { signed_message: signature };
+  const mock = createMockProvider({ signMessage: async () => signed });
+  void [signature, native, mock];
+}
+
 function useLegacyProvider(
-  legacy: Omit<RgbProvider, "burnAsset" | "getConsignment">,
+  legacy: Omit<RgbProvider, "burnAsset" | "getConsignment" | "signMessage">,
   args: RgbBurnAssetArgs,
 ): void {
   // Adding the extension must not require an existing wallet to implement it.
@@ -200,6 +217,7 @@ window.addEventListener("rgb:announceProvider", (e) => {
 
 void useRgb;
 void useBurn;
+void useSignMessage;
 void useLegacyProvider;
 void useDiscovery;
 void useWalletSide;
