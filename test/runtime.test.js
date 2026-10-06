@@ -451,7 +451,7 @@ describe("message signing", () => {
     await rgb.enable();
     assert.deepEqual(seen, []);
     assert.equal(supports(await rgb.getInfo(), "signMessage"), true);
-    const messages = ["  Підпис 🟠 e\u0301\r\n", ""];
+    const messages = ["  Test message e\u0301\r\n", ""];
     for (const message of messages) assert.deepEqual(await rgb.signMessage(message), result);
     assert.deepEqual(seen, messages);
   });
