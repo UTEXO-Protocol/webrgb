@@ -103,8 +103,9 @@ around them.
   dApps MUST check both the method list and their presence.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
-- **`signMessage(message)`** returns `{ signature }` in the LND-compatible
-  format below. `message` MUST be a well-formed Unicode string; other values
+- **`signMessage(message)`** returns `{ signature }` in the
+  [LND-compatible](https://lightning.engineering/api-docs/api/lnd/lightning/sign-message/)
+  zbase32 format. `message` MUST be a well-formed Unicode string; other values
   MUST reject with `INVALID_PARAMS` before prompting. The wallet MUST show
   the requesting origin and the complete message, identify the signing
   account, and obtain approval for each call. It MUST use that account's
@@ -170,40 +171,6 @@ around them.
   confirmation MUST show the figure actually encoded.
 - **`payLnInvoice(invoice)`** pays a BOLT-11 invoice that carries an asset. A
   plain Bitcoin invoice SHOULD be refused — that is `webln.sendPayment()`.
-
-### Message signature format
-
-`signMessage` uses the default double-hash format of
-[LND SignMessage](https://lightning.engineering/api-docs/api/lnd/lightning/sign-message/),
-also implemented by LDK's `lightning::util::message_signing`:
-
-```text
-digest = SHA256(SHA256(UTF8("Lightning Signed Message:") || UTF8(message)))
-(r, s, recoveryId) = recoverable ECDSA on secp256k1 over digest
-signature = zbase32(byte(31 + recoveryId) || r[32] || s[32])
-```
-
-The prefix has no newline or length prefix. `r` and `s` are fixed-width
-big-endian integers; `recoveryId` is 0–3. The 65 bytes are encoded with the
-zbase32 alphabet `ybndrfg8ejkmcpqxot1uwisza345h769`, without padding.
-The result contains only `signature`; neither a `scheme` nor a `publicKey`
-field is required. A wallet MUST NOT substitute Bitcoin legacy or BIP-322
-signatures under this method.
-
-A verifier can recover the signing public key from the message and signature.
-To authenticate an existing account, it MUST compare that key with the
-expected account key. This does not prove control of `getAddress()` or that
-the signer runs a Lightning node. Authentication challenges, expiry and
-backend sessions belong to the dApp.
-
-This interoperability vector comes from
-[LDK's message-signing tests](https://github.com/lightningdevkit/rust-lightning/blob/main/lightning/src/util/message_signing.rs):
-
-```text
-message: test message
-signature: d9tibmnic9t5y41hg7hkakdcra94akas9ku3rmmj4ag9mritc8ok4p5qzefs78c9pqfhpuftqqzhydbdwfg7u6w6wdxcqpqn4sj4e73e
-recovered public key (compressed hex): 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
-```
 
 ## 5. Events
 

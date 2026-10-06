@@ -2,8 +2,6 @@
 // are checked separately by tsc; these tests are what the .d.ts cannot prove:
 // that discovery settles, times out, and cleans up after itself.
 import assert from "node:assert/strict";
-import { createHash, createPublicKey, verify } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { after, afterEach, describe, it } from "node:test";
 
 import {
@@ -446,42 +444,6 @@ describe("mock provider", () => {
 describe("message signing", () => {
   // LDK's sign/recover test vector; no mock key is shipped with the provider.
   const signature = "d9tibmnic9t5y41hg7hkakdcra94akas9ku3rmmj4ag9mritc8ok4p5qzefs78c9pqfhpuftqqzhydbdwfg7u6w6wdxcqpqn4sj4e73e";
-
-  it("the documented LDK vector verifies with Node's independent ECDSA implementation", () => {
-    const spec = readFileSync(new URL("../SPEC.md", import.meta.url), "utf8");
-    const message = spec.match(/^message: (.+)$/m)[1];
-    const encoded = spec.match(/^signature: (.+)$/m)[1];
-    const publicKey = spec.match(/^recovered public key \(compressed hex\): (.+)$/m)[1];
-    const alphabet = "ybndrfg8ejkmcpqxot1uwisza345h769";
-    const bytes = [];
-    let bits = 0, value = 0;
-    for (const character of encoded) {
-      const digit = alphabet.indexOf(character);
-      assert.ok(digit >= 0, "invalid zbase32 character");
-      value = (value << 5) | digit;
-      bits += 5;
-      if (bits >= 8) {
-        bits -= 8;
-        bytes.push((value >>> bits) & 255);
-        value &= (1 << bits) - 1;
-      }
-    }
-    assert.equal(bytes.length, 65);
-    assert.ok(bytes[0] >= 31 && bytes[0] <= 34);
-    const key = createPublicKey({
-      key: Buffer.from("3036301006072a8648ce3d020106052b8104000a032200" + publicKey, "hex"),
-      format: "der",
-      type: "spki",
-    });
-    const check = (text) => verify(
-      "sha256", // Node supplies the second SHA256 round.
-      createHash("sha256").update("Lightning Signed Message:" + text, "utf8").digest(),
-      { key, dsaEncoding: "ieee-p1363" },
-      Buffer.from(bytes.slice(1)),
-    );
-    assert.equal(check(message), true);
-    assert.equal(check(message + " "), false);
-  });
 
   it("is opt-in and does not require a Lightning runtime", async () => {
     const unsupported = createMockProvider();

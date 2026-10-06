@@ -60,7 +60,7 @@ const { signature } = await provider.signMessage(message);
 ```
 
 Send the signature to your backend. It verifies the original message using
-the [LND-compatible format](./SPEC.md#message-signature-format) and recovers
+the LND-compatible format and recovers
 the signing public key. For an existing account, compare it with that
 account's key. A login challenge should include the domain, a one-time nonce
 and expiry, checked by the backend. Connecting or minting does not require
