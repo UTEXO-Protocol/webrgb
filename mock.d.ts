@@ -28,11 +28,7 @@ export interface MockProviderOptions {
   autoEnable?: boolean;
   /** Make every confirmation-gated call reject with `USER_REJECTED`. */
   rejectConfirmations?: boolean;
-  /**
-   * Opt in to signMessage with a test or wallet signer. Receives the unchanged
-   * message after the mock's access, argument and confirmation checks.
-   * The mock does not hold a key or generate cryptographic signatures itself.
-   */
+  /** Optional test signer; runs after access, argument and confirmation checks. */
   signMessage?: (message: string) => Promise<RgbSignMessageResult>;
   /** Assets the wallet starts with. Balances default to 0. */
   assets?: Array<RgbAsset & { balance?: number }>;

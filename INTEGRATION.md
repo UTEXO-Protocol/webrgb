@@ -49,22 +49,15 @@ and any payout. Track the burn with
 retried using the saved txid. If a burn times out, check wallet history before
 requesting another burn.
 
-For message signing, check support and pass the exact message your backend
-expects:
+To sign a message, check support and request a signature:
 
 ```ts
-if (!supports(await provider.getInfo(), "signMessage") || !provider.signMessage) {
-  throw new Error("This wallet does not support message signing");
+if (supports(await provider.getInfo(), "signMessage") && provider.signMessage) {
+  const { signature } = await provider.signMessage(message);
 }
-const { signature } = await provider.signMessage(message);
 ```
 
-Send the signature to your backend. It verifies the original message using
-the LND-compatible format and recovers
-the signing public key. For an existing account, compare it with that
-account's key. A login challenge should include the domain, a one-time nonce
-and expiry, checked by the backend. Connecting or minting does not require
-message signing.
+The wallet asks for approval. Your backend can verify the returned signature.
 
 ## For wallet developers
 
@@ -79,10 +72,3 @@ A mobile wallet attaches it to a transport adapter. Keep access scoped to the
 approved dApp. Connection approval does not approve a burn or the sharing of
 a consignment or message signing; each method follows the consent rules in
 the specification.
-
-For `signMessage`, show the origin, complete message and signing account,
-then obtain approval and check that the origin is still authorized before
-signing. Map your backend's signature field to `{ signature }` without
-changing its zbase32 encoding. Backends that trim messages must be adapted
-to sign the original UTF-8 bytes. Advertise the method only when your signer
-supports the specified format; no Lightning node is required.

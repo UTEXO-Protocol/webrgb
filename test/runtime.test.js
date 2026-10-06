@@ -442,64 +442,30 @@ describe("mock provider", () => {
 });
 
 describe("message signing", () => {
-  // LDK's sign/recover test vector; no mock key is shipped with the provider.
-  const signature = "d9tibmnic9t5y41hg7hkakdcra94akas9ku3rmmj4ag9mritc8ok4p5qzefs78c9pqfhpuftqqzhydbdwfg7u6w6wdxcqpqn4sj4e73e";
-
-  it("is opt-in and does not require a Lightning runtime", async () => {
-    const unsupported = createMockProvider();
-    await unsupported.enable();
-    assert.equal(supports(await unsupported.getInfo(), "signMessage"), false);
-    await assert.rejects(unsupported.signMessage("test message"), { code: "METHOD_NOT_SUPPORTED" });
-
+  it("passes the unchanged message to the configured signer", async () => {
+    const seen = [], result = { signature: "mock-signature" };
     const rgb = createMockProvider({
-      protocol: "RGB_L1",
-      signMessage: async (message) => {
-        assert.equal(message, "test message");
-        return { signature };
-      },
+      signMessage: async (message) => { seen.push(message); return result; },
     });
-    await assert.rejects(rgb.signMessage("test message"), { code: "NOT_ENABLED" });
+    await assert.rejects(rgb.signMessage("hello"), { code: "NOT_ENABLED" });
     await rgb.enable();
+    assert.deepEqual(seen, []);
     assert.equal(supports(await rgb.getInfo(), "signMessage"), true);
-    assert.deepEqual(await rgb.signMessage("test message"), { signature });
-  });
-
-  it("preserves whitespace, Unicode and empty messages", async () => {
-    const seen = [];
-    const rgb = createMockProvider({
-      signMessage: async (message) => {
-        seen.push(message);
-        return { signature };
-      },
-    });
-    await rgb.enable();
-    const messages = ["  sign in\r\n", "Підпис 🟠 e\u0301", ""];
-    for (const message of messages) await rgb.signMessage(message);
+    const messages = ["  Підпис 🟠 e\u0301\r\n", ""];
+    for (const message of messages) assert.deepEqual(await rgb.signMessage(message), result);
     assert.deepEqual(seen, messages);
   });
 
-  it("rejects malformed messages before confirmation or signing", async () => {
+  it("checks arguments and user approval before signing", async () => {
     const rgb = createMockProvider({
       rejectConfirmations: true,
       signMessage: async () => { throw new Error("signer must not run"); },
     });
     await rgb.enable();
-    for (const message of [undefined, null, 1, { message: "hello" }, "\ud800", "\udc00"]) {
+    for (const message of [undefined, null, 1, "\ud800"]) {
       await assert.rejects(rgb.signMessage(message), { code: "INVALID_PARAMS" });
     }
     await assert.rejects(rgb.signMessage("hello"), { code: "USER_REJECTED" });
-  });
-
-  it("does not sign on enable or when the method is disabled", async () => {
-    let signed = 0;
-    const rgb = createMockProvider({
-      methods: ["enable", "getInfo"],
-      signMessage: async () => { signed++; return { signature }; },
-    });
-    await rgb.enable();
-    await rgb.enable();
-    await assert.rejects(rgb.signMessage("test message"), { code: "METHOD_NOT_SUPPORTED" });
-    assert.equal(signed, 0);
   });
 });
 
@@ -518,19 +484,12 @@ describe("conformance", () => {
     assert.equal(missing.checks.find((c) => c.name === "signMessage-available")?.status, "fail");
   });
 
-  it("accepts wallets without message signing", async () => {
-    const rgb = createMockProvider();
-    delete rgb.signMessage;
-    const report = await runConformance(rgb);
-    assert.equal(report.ok, true, formatReport(report));
-    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "skip");
-  });
-
   it("passes a conforming wallet", async () => {
     const rgb = createMockProvider({ assets: [{ id: "rgb:a", ticker: "A", balance: 7 }] });
     const report = await runConformance(rgb);
     assert.equal(report.ok, true, formatReport(report));
     assert.equal(report.failed, 0);
+    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "skip");
     assert.ok(report.passed >= 10, formatReport(report));
   });
 

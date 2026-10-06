@@ -103,17 +103,9 @@ around them.
   dApps MUST check both the method list and their presence.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
-- **`signMessage(message)`** returns `{ signature }` in the
-  [LND-compatible](https://lightning.engineering/api-docs/api/lnd/lightning/sign-message/)
-  zbase32 format. `message` MUST be a well-formed Unicode string; other values
-  MUST reject with `INVALID_PARAMS` before prompting. The wallet MUST show
-  the requesting origin and the complete message, identify the signing
-  account, and obtain approval for each call. It MUST use that account's
-  signing key and recheck origin authorization after approval. It MUST sign
-  the exact UTF-8 bytes, without trimming, Unicode normalization or an added newline.
-  The method MAY be served by either `RGB_L1` or `RGB_LN` wallets; it does not
-  require channels or a running Lightning node. `enable()` MUST NOT trigger
-  message signing, and connection approval is not signing approval.
+- **`signMessage(message)`** signs a string and returns `{ signature }` as
+  an LND-compatible zbase32 signature. The wallet MUST display the message
+  and obtain user approval before signing it unchanged.
 - **`blindReceive({ assetId?, amount?, minConfirmations?, … })`** returns an
   RGB invoice against a blinded UTXO. Omitting `amount` means any amount.
   Omitting `assetId` means any asset: the invoice names no contract, and it is

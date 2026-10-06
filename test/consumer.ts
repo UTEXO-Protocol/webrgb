@@ -117,15 +117,8 @@ async function useSignMessage(provider: RgbProvider): Promise<void> {
   await provider.signMessage("test message");
   if (!supports(await provider.getInfo(), "signMessage") || !provider.signMessage) return;
   const signed: RgbSignMessageResult = await provider.signMessage("test message");
-  const signature: string = signed.signature;
-  // @ts-expect-error the method accepts the message directly, without a scheme
-  await provider.signMessage({ message: "test message", scheme: "lightning" });
-  // @ts-expect-error a result contains the signature, not a separate public key
-  signed.publicKey;
-  // @ts-expect-error backend-specific field names do not cross the provider boundary
-  const native: RgbSignMessageResult = { signed_message: signature };
-  const mock = createMockProvider({ signMessage: async () => signed });
-  void [signature, native, mock];
+  signed.signature.toUpperCase();
+  createMockProvider({ signMessage: async () => signed });
 }
 
 function useLegacyProvider(

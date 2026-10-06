@@ -99,7 +99,7 @@ export interface RgbInfo {
 export declare function supports(info: Pick<RgbInfo, "methods">, method: RgbMethod): boolean;
 
 export interface RgbSignMessageResult {
-  /** LND-compatible recoverable message signature, encoded as zbase32. */
+  /** LND-compatible zbase32 signature. */
   signature: string;
 }
 
@@ -333,7 +333,7 @@ export interface RgbProvider {
   getInfo(): Promise<RgbInfo>;
   /** Bitcoin address of the RGB wallet, used to anchor RGB state. */
   getAddress(): Promise<{ address: string }>;
-  /** Optional message signing; requires confirmation and preserves the exact UTF-8 message. */
+  /** Optional; asks the user to sign the unchanged message. */
   signMessage?(message: string): Promise<RgbSignMessageResult>;
   blindReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
   issueAsset(args: RgbIssueAssetArgs): Promise<RgbIssueAssetResult>;

@@ -8,8 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Optional `signMessage(message)` returning an LND-compatible zbase32
-  signature, with a mock signer hook, capability checks and integration examples.
+- Optional `signMessage(message)` method and mock signer callback.
 - Optional `burnAsset()` and `getConsignment()` types and specification for
   BFA burns and sharing their proofs with third parties, with user consent.
 - Type coverage and read-only checks for the optional methods.
