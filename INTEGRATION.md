@@ -3,7 +3,7 @@
 WebRGB defines the calls between a dApp and a wallet. The dApp uses a
 `RgbProvider`; the wallet implements its methods and handles user consent.
 Browser extensions and mobile wallets use the same method signatures.
-The BFA methods below are additions in this UTEXO fork.
+The BFA methods and message signing below are additions in this UTEXO fork.
 
 ## For dApp developers
 
@@ -49,6 +49,16 @@ and any payout. Track the burn with
 retried using the saved txid. If a burn times out, check wallet history before
 requesting another burn.
 
+To sign a message, check support and request a signature:
+
+```ts
+if (supports(await provider.getInfo(), "signMessage") && provider.signMessage) {
+  const { signature } = await provider.signMessage(message);
+}
+```
+
+The wallet asks for approval. Your backend can verify the returned signature.
+
 ## For wallet developers
 
 Implement the methods in [SPEC.md](./SPEC.md) in your wallet app. For example,
@@ -60,4 +70,5 @@ Map its arguments, results and errors to WebRGB.
 An extension injects this provider and joins discovery (§1–2 in the spec).
 A mobile wallet attaches it to a transport adapter. Keep access scoped to the
 approved dApp. Connection approval does not approve a burn or the sharing of
-a consignment; each method follows the consent rules in the specification.
+a consignment or message signing; each method follows the consent rules in
+the specification.

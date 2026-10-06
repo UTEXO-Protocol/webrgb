@@ -65,6 +65,7 @@ export type RgbMethod =
   | "enable"
   | "getInfo"
   | "getAddress"
+  | "signMessage"
   | "blindReceive"
   | "issueAsset"
   | "listAssets"
@@ -96,6 +97,11 @@ export interface RgbInfo {
 
 /** `true` when `info.methods` lists `method`. */
 export declare function supports(info: Pick<RgbInfo, "methods">, method: RgbMethod): boolean;
+
+export interface RgbSignMessageResult {
+  /** LND-compatible zbase32 signature. */
+  signature: string;
+}
 
 export interface RgbBlindReceiveArgs {
   /**
@@ -327,6 +333,8 @@ export interface RgbProvider {
   getInfo(): Promise<RgbInfo>;
   /** Bitcoin address of the RGB wallet, used to anchor RGB state. */
   getAddress(): Promise<{ address: string }>;
+  /** Optional; asks the user to sign the unchanged message. */
+  signMessage?(message: string): Promise<RgbSignMessageResult>;
   blindReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
   issueAsset(args: RgbIssueAssetArgs): Promise<RgbIssueAssetResult>;
   listAssets(): Promise<RgbAssetList>;

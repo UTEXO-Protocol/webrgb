@@ -4,6 +4,7 @@
 browser extension ≥ 0.3.0 and described by `index.d.ts` in this repository.
 The `burnAsset` and `getConsignment` methods below are optional BFA extensions
 provided by this fork; they are not part of that reference implementation.
+`signMessage` is also an optional extension provided by this fork.
 
 A **wallet** injects a provider into a web page. A **dApp** calls it to issue,
 receive, send and track [RGB](https://rgb.tech) assets, and to pay or receive
@@ -75,6 +76,7 @@ Beyond the connection, consent is per call:
 |--------|---------|-------|
 | `getInfo`, `getAddress`, `listAssets`, `getAssetBalance`, `listTransfers`, `getTransferStatus`, `decodeRgbInvoice` | MUST NOT | Read-only; a page may poll them |
 | `blindReceive` | MUST | Creates an invoice that binds a UTXO |
+| `signMessage` | MUST | Signs the displayed message for the requesting origin |
 | `issueAsset` | MUST | Mints; MAY also require a separate wallet capability |
 | `sendAsset` | MUST | Moves assets |
 | `burnAsset` | MUST | Burns assets |
@@ -96,11 +98,14 @@ around them.
   methods the wallet will serve. A method absent from it MUST reject with
   `METHOD_NOT_SUPPORTED`; a method present in it MUST NOT. `makeLnInvoice` and
   `payLnInvoice` MUST appear only when `protocol` is `"RGB_LN"`, and
-  `issueAsset` only when the runtime can mint. `burnAsset` and `getConsignment`
-  are optional and MAY be absent from the provider object when unsupported;
+  `issueAsset` only when the runtime can mint. `burnAsset`, `getConsignment`
+  and `signMessage` are optional and MAY be absent when unsupported;
   dApps MUST check both the method list and their presence.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
+- **`signMessage(message)`** signs a string and returns `{ signature }` as
+  an LND-compatible zbase32 signature. The wallet MUST display the message
+  and obtain user approval before signing it unchanged.
 - **`blindReceive({ assetId?, amount?, minConfirmations?, … })`** returns an
   RGB invoice against a blinded UTXO. Omitting `amount` means any amount.
   Omitting `assetId` means any asset: the invoice names no contract, and it is
@@ -208,8 +213,8 @@ console.log(formatReport(await runConformance(window.rgb)));
 ```
 
 It never issues, sends or creates an invoice, so it raises no confirmation and
-costs nothing to run against a funded wallet. It checks advertised burn
-methods without calling `burnAsset()` or sharing a consignment.
+costs nothing to run against a funded wallet. It checks advertised optional
+methods without burning assets, sharing a consignment or signing a message.
 
 ## 8. Changes
 

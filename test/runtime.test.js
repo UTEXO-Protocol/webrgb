@@ -441,12 +441,55 @@ describe("mock provider", () => {
   });
 });
 
+describe("message signing", () => {
+  it("passes the unchanged message to the configured signer", async () => {
+    const seen = [], result = { signature: "mock-signature" };
+    const rgb = createMockProvider({
+      signMessage: async (message) => { seen.push(message); return result; },
+    });
+    await assert.rejects(rgb.signMessage("hello"), { code: "NOT_ENABLED" });
+    await rgb.enable();
+    assert.deepEqual(seen, []);
+    assert.equal(supports(await rgb.getInfo(), "signMessage"), true);
+    const messages = ["  Test message e\u0301\r\n", ""];
+    for (const message of messages) assert.deepEqual(await rgb.signMessage(message), result);
+    assert.deepEqual(seen, messages);
+  });
+
+  it("checks arguments and user approval before signing", async () => {
+    const rgb = createMockProvider({
+      rejectConfirmations: true,
+      signMessage: async () => { throw new Error("signer must not run"); },
+    });
+    await rgb.enable();
+    for (const message of [undefined, null, 1, "\ud800"]) {
+      await assert.rejects(rgb.signMessage(message), { code: "INVALID_PARAMS" });
+    }
+    await assert.rejects(rgb.signMessage("hello"), { code: "USER_REJECTED" });
+  });
+});
+
 describe("conformance", () => {
+  it("checks message-signing support without requesting a signature", async () => {
+    const rgb = createMockProvider({
+      signMessage: async () => { throw new Error("conformance must not sign"); },
+    });
+    const report = await runConformance(rgb);
+    assert.equal(report.ok, true, formatReport(report));
+    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "pass");
+    assert.equal(rgb.calls.some((call) => call.method === "signMessage"), false);
+
+    delete rgb.signMessage;
+    const missing = await runConformance(rgb);
+    assert.equal(missing.checks.find((c) => c.name === "signMessage-available")?.status, "fail");
+  });
+
   it("passes a conforming wallet", async () => {
     const rgb = createMockProvider({ assets: [{ id: "rgb:a", ticker: "A", balance: 7 }] });
     const report = await runConformance(rgb);
     assert.equal(report.ok, true, formatReport(report));
     assert.equal(report.failed, 0);
+    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "skip");
     assert.ok(report.passed >= 10, formatReport(report));
   });
 

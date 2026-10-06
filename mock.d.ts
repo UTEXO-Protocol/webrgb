@@ -12,6 +12,7 @@ import type {
   RgbProtocol,
   RgbProvider,
   RgbProviderInfo,
+  RgbSignMessageResult,
   RgbTransfer,
 } from "./index.js";
 
@@ -27,6 +28,8 @@ export interface MockProviderOptions {
   autoEnable?: boolean;
   /** Make every confirmation-gated call reject with `USER_REJECTED`. */
   rejectConfirmations?: boolean;
+  /** Optional test signer; runs after access, argument and confirmation checks. */
+  signMessage?: (message: string) => Promise<RgbSignMessageResult>;
   /** Assets the wallet starts with. Balances default to 0. */
   assets?: Array<RgbAsset & { balance?: number }>;
   /** Delay every call by this many milliseconds, to shake out missing awaits. */

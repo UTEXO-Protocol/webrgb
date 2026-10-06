@@ -2,13 +2,17 @@
 // project resolve it: through the "exports" map, by package name. This is what
 // catches a subpath that only works for a bundler.
 import { isProviderError, listProviders, requestProvider, supports } from "@utexo/webrgb";
-import type { RgbBurnAssetArgs, RgbGetConsignmentResult, RgbInfo, RgbProvider } from "@utexo/webrgb";
+import type { RgbBurnAssetArgs, RgbGetConsignmentResult, RgbInfo, RgbProvider, RgbSignMessageResult } from "@utexo/webrgb";
 import { createMockProvider, installMockProvider } from "@utexo/webrgb/mock";
 import { formatReport, runConformance } from "@utexo/webrgb/conformance";
 
 async function main(): Promise<void> {
   const rgb: RgbProvider = await requestProvider({ enable: true, timeoutMs: 1000 });
   const info: RgbInfo = await rgb.getInfo();
+  if (supports(info, "signMessage") && rgb.signMessage) {
+    const result: RgbSignMessageResult = await rgb.signMessage("test message");
+    result.signature.toUpperCase();
+  }
   if (supports(info, "makeLnInvoice")) {
     await rgb.makeLnInvoice({ assetId: "rgb:x", assetAmount: 1 });
   }

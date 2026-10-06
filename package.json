@@ -1,6 +1,6 @@
 {
   "name": "@utexo/webrgb",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "WebRGB: TypeScript declarations, discovery, a mock wallet and a conformance suite for the window.rgb provider injected by RGB wallets such as the KaleidoSwap extension.",
   "license": "MIT",
   "repository": {

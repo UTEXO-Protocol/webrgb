@@ -54,6 +54,7 @@ try {
 |--------|---------|
 | `enable()` / `getInfo()` | Connect the origin; learn network, runtime and served methods |
 | `getAddress()` | Bitcoin address that anchors the wallet's RGB state |
+| `signMessage(message)` | Sign a message with user approval (optional) |
 | `blindReceive(args?)` | Blinded-UTXO receive invoice; omit `assetId` for any asset, including one the wallet has never held |
 | `issueAsset(args)` | Mint a new asset (gated by its own wallet capability) |
 | `listAssets()` / `getAssetBalance(id)` | Holdings |
@@ -110,6 +111,8 @@ expect(rgb.calls.map((c) => c.method)).toContain("sendAsset");
 // In a dev build: put it on window.rgb and let the app find it as usual.
 const { uninstall } = installMockProvider();
 ```
+
+Pass a `signMessage` callback to `createMockProvider` to enable signing in tests.
 
 ## Conformance
 
