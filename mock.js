@@ -9,6 +9,7 @@ const BASE_METHODS = [
   "getInfo",
   "getAddress",
   "blindReceive",
+  "witnessReceive",
   "issueAsset",
   "listAssets",
   "getAssetBalance",
@@ -98,6 +99,23 @@ export function createMockProvider(options = {}) {
   }
 
   /**
+   * @param {"blindReceive" | "witnessReceive"} method
+   * @param {import("./index.js").RgbBlindReceiveArgs} args
+   */
+  async function receive(method, args) {
+    await call(method, [args]);
+    if (args.assetId !== undefined) requireAsset(args.assetId);
+    confirm();
+    const recipientId = `${method === "blindReceive" ? "utxob" : "wvout"}:mock${nextId()}`;
+    return {
+      invoice: `${args.assetId ?? "rgb:~"}/RGB20/${recipientId}`,
+      recipientId,
+      expirationTimestamp: Math.floor(Date.now() / 1000) + (args.durationSeconds ?? 86400),
+      minConfirmations: Math.max(args.minConfirmations ?? 1, minConfirmationsFloor),
+    };
+  }
+
+  /**
    * @param {import("./index.js").RgbEvent} event
    * @param {import("./index.js").RgbTransfer} transfer
    */
@@ -145,18 +163,12 @@ export function createMockProvider(options = {}) {
 
     /** @param {import("./index.js").RgbBlindReceiveArgs} [args] */
     async blindReceive(args = {}) {
-      await call("blindReceive", [args]);
-      // Arguments are checked before the prompt, as a wallet does.
-      if (args.assetId !== undefined) requireAsset(args.assetId);
-      confirm();
-      const recipientId = `utxob:mock${nextId()}`;
-      return {
-        // An any-asset invoice leaves the contract out, like rgb-lib's `rgb:~/…`.
-        invoice: `${args.assetId ?? "rgb:~"}/RGB20/${recipientId}`,
-        recipientId,
-        expirationTimestamp: Math.floor(Date.now() / 1000) + (args.durationSeconds ?? 86400),
-        minConfirmations: Math.max(args.minConfirmations ?? 1, minConfirmationsFloor),
-      };
+      return receive("blindReceive", args);
+    },
+
+    /** @param {import("./index.js").RgbWitnessReceiveArgs} [args] */
+    async witnessReceive(args = {}) {
+      return receive("witnessReceive", args);
     },
 
     /** @param {import("./index.js").RgbIssueAssetArgs} args */
@@ -257,7 +269,7 @@ export function createMockProvider(options = {}) {
       await call("decodeRgbInvoice", [args]);
       if (!invoice) throw fail("An invoice is required", "INVALID_PARAMS");
       const assetId = parseAssetId(invoice);
-      const amount = /\/(\d+)\+utxob:/.exec(invoice);
+      const amount = /\/(\d+)\+(?:utxob|wvout):/.exec(invoice);
       return {
         assetId,
         // A fungible 0 is an any-amount invoice, not a request for zero.
@@ -349,7 +361,7 @@ function parseAssetId(invoice) {
 
 /** @param {string} invoice */
 function parseRecipientId(invoice) {
-  const match = /(utxob:[^?/]+)/.exec(invoice);
+  const match = /((?:utxob|wvout):[^?/]+)/.exec(invoice);
   return match ? match[1] : undefined;
 }
 

@@ -5,6 +5,7 @@ browser extension ≥ 0.3.0 and described by `index.d.ts` in this repository.
 The `burnAsset` and `getConsignment` methods below are optional BFA extensions
 provided by this fork; they are not part of that reference implementation.
 `signMessage` is also an optional extension provided by this fork.
+`witnessReceive` is a standard provider method added by this fork.
 
 A **wallet** injects a provider into a web page. A **dApp** calls it to issue,
 receive, send and track [RGB](https://rgb.tech) assets, and to pay or receive
@@ -76,6 +77,7 @@ Beyond the connection, consent is per call:
 |--------|---------|-------|
 | `getInfo`, `getAddress`, `listAssets`, `getAssetBalance`, `listTransfers`, `getTransferStatus`, `decodeRgbInvoice` | MUST NOT | Read-only; a page may poll them |
 | `blindReceive` | MUST | Creates an invoice that binds a UTXO |
+| `witnessReceive` | MUST | Creates an invoice for an output in the sender's transaction |
 | `signMessage` | MUST | Signs the displayed message for the requesting origin |
 | `issueAsset` | MUST | Mints; MAY also require a separate wallet capability |
 | `sendAsset` | MUST | Moves assets |
@@ -118,6 +120,9 @@ around them.
   A wallet MAY enforce a higher floor, and SHOULD raise a lower request to its
   floor rather than reject. The confirmation MUST show the value actually used,
   and the result MUST carry it as `minConfirmations`.
+- **`witnessReceive(args?)`** returns an RGB invoice for an output created
+  by the sender's transaction, without requiring an existing receiver UTXO.
+  Its parameters, result and confirmation rules are the same as `blindReceive`.
 - **`issueAsset({ schema, ticker, name, amounts, precision? })`** mints.
   `schema` is `"nia"`, `"uda"` or `"cfa"`; a wallet that cannot serve a schema
   MUST reject with `METHOD_NOT_SUPPORTED` rather than substituting another.

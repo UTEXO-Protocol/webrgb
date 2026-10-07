@@ -131,6 +131,10 @@ export async function runConformance(provider, options = {}) {
     }
   });
 
+  await check("witnessReceive-available", () => {
+    assert(typeof provider.witnessReceive === "function", "witnessReceive is missing");
+  });
+
   // An optional method may be absent. Inspect advertised functions without
   // invoking them: these methods require consent or can disclose wallet data.
   for (const method of /** @type {const} */ (["burnAsset", "getConsignment", "signMessage"])) {

@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `witnessReceive()` provider method, types and mock invoice support.
 - Optional `signMessage(message)` method and mock signer callback.
 - Optional `burnAsset()` and `getConsignment()` types and specification for
   BFA burns and sharing their proofs with third parties, with user consent.

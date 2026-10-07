@@ -26,6 +26,9 @@ For mint, request an invoice and pass it to the bridge or faucet:
 const { invoice } = await provider.blindReceive({ assetId, amount: 5 });
 ```
 
+For witness receiving, use `provider.witnessReceive({ assetId, amount: 5 })`.
+It returns the same fields; the sender creates the receiving output.
+
 `issueAsset()` creates a new asset; it is not used to receive an existing
 bridge asset. For burn, check capabilities before calling the optional methods:
 

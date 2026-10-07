@@ -56,6 +56,7 @@ try {
 | `getAddress()` | Bitcoin address that anchors the wallet's RGB state |
 | `signMessage(message)` | Sign a message with user approval (optional) |
 | `blindReceive(args?)` | Blinded-UTXO receive invoice; omit `assetId` for any asset, including one the wallet has never held |
+| `witnessReceive(args?)` | Receive invoice for an output created by the sender's transaction |
 | `issueAsset(args)` | Mint a new asset (gated by its own wallet capability) |
 | `listAssets()` / `getAssetBalance(id)` | Holdings |
 | `sendAsset(args)` | Send against an RGB invoice, or explicitly |
