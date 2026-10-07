@@ -349,6 +349,29 @@ describe("mock provider", () => {
     });
   });
 
+  it("creates witness invoices that can be decoded and sent", async () => {
+    const rgb = createMockProvider({ minConfirmationsFloor: 3, assets: [{ id: "rgb:a" }] });
+    await rgb.enable();
+    assert.equal(supports(await rgb.getInfo(), "witnessReceive"), true);
+    const received = await rgb.witnessReceive({ assetId: "rgb:a", minConfirmations: 1 });
+    assert.match(received.recipientId, /^wvout:/);
+    assert.equal(received.minConfirmations, 3);
+    const decoded = await rgb.decodeRgbInvoice(received.invoice);
+    assert.equal(decoded.recipientId, received.recipientId);
+    assert.equal((await rgb.sendAsset({ invoice: received.invoice })).recipientId, received.recipientId);
+    const anyAsset = await rgb.witnessReceive();
+    assert.equal((await rgb.decodeRgbInvoice(anyAsset.invoice)).assetId, undefined);
+    assert.equal((await rgb.decodeRgbInvoice("rgb:a/RGB20/5+wvout:mock")).amount, 5);
+  });
+
+  it("checks access, assets and consent before creating a witness invoice", async () => {
+    const rgb = createMockProvider({ rejectConfirmations: true });
+    await assert.rejects(rgb.witnessReceive(), { code: "NOT_ENABLED" });
+    await rgb.enable();
+    await assert.rejects(rgb.witnessReceive({ assetId: "rgb:unknown" }), { code: "ASSET_NOT_FOUND" });
+    await assert.rejects(rgb.witnessReceive(), { code: "USER_REJECTED" });
+  });
+
   it("rejects an unimplemented schema and an unknown asset", async () => {
     const rgb = createMockProvider();
     await rgb.enable();
@@ -470,6 +493,15 @@ describe("message signing", () => {
 });
 
 describe("conformance", () => {
+  it("requires witnessReceive without creating an invoice", async () => {
+    const rgb = createMockProvider();
+    assert.equal((await runConformance(rgb)).ok, true);
+    assert.equal(rgb.calls.some((call) => call.method === "witnessReceive"), false);
+    delete rgb.witnessReceive;
+    const report = await runConformance(rgb);
+    assert.equal(report.checks.find((c) => c.name === "witnessReceive-available")?.status, "fail");
+  });
+
   it("checks message-signing support without requesting a signature", async () => {
     const rgb = createMockProvider({
       signMessage: async () => { throw new Error("conformance must not sign"); },

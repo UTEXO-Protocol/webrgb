@@ -22,6 +22,8 @@ import type {
   RgbProvider,
   RgbProviderDetail,
   RgbTransfer,
+  RgbWitnessReceiveArgs,
+  RgbWitnessReceiveResult,
 } from "@utexo/webrgb";
 import { createMockProvider, installMockProvider } from "@utexo/webrgb/mock";
 import type { MockRgbProvider } from "@utexo/webrgb/mock";
@@ -38,6 +40,10 @@ async function useRgb(): Promise<void> {
   // No asset id: an invoice that accepts any asset.
   const anyAsset = await window.rgb.blindReceive();
   anyAsset.minConfirmations?.toFixed();
+  const witnessArgs: RgbWitnessReceiveArgs = { assetId: "rgb:x", amount: 1 };
+  const witness: RgbWitnessReceiveResult = await window.rgb.witnessReceive(witnessArgs);
+  witness.invoice.toUpperCase();
+  await window.rgb.witnessReceive();
   const sent = await window.rgb.sendAsset({ invoice });
   sent.txid?.toUpperCase();
   await window.rgb.sendAsset({ assetId: "rgb:x", amount: 1, recipientId: "utxob:y" });

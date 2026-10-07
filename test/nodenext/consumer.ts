@@ -9,6 +9,8 @@ import { formatReport, runConformance } from "@utexo/webrgb/conformance";
 async function main(): Promise<void> {
   const rgb: RgbProvider = await requestProvider({ enable: true, timeoutMs: 1000 });
   const info: RgbInfo = await rgb.getInfo();
+  const { invoice } = await rgb.witnessReceive();
+  invoice.toUpperCase();
   if (supports(info, "signMessage") && rgb.signMessage) {
     const result: RgbSignMessageResult = await rgb.signMessage("test message");
     result.signature.toUpperCase();

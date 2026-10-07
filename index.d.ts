@@ -67,6 +67,7 @@ export type RgbMethod =
   | "getAddress"
   | "signMessage"
   | "blindReceive"
+  | "witnessReceive"
   | "issueAsset"
   | "listAssets"
   | "getAssetBalance"
@@ -127,6 +128,9 @@ export interface RgbBlindReceiveResult {
   /** Confirmations the wallet will wait for — at least what was asked. */
   minConfirmations?: number;
 }
+
+export type RgbWitnessReceiveArgs = RgbBlindReceiveArgs;
+export type RgbWitnessReceiveResult = RgbBlindReceiveResult;
 
 export interface RgbIssueAssetArgs {
   /** Only `"nia"` is served today; `"uda"` and `"cfa"` reject with METHOD_NOT_SUPPORTED. */
@@ -336,6 +340,7 @@ export interface RgbProvider {
   /** Optional; asks the user to sign the unchanged message. */
   signMessage?(message: string): Promise<RgbSignMessageResult>;
   blindReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
+  witnessReceive(args?: RgbWitnessReceiveArgs): Promise<RgbWitnessReceiveResult>;
   issueAsset(args: RgbIssueAssetArgs): Promise<RgbIssueAssetResult>;
   listAssets(): Promise<RgbAssetList>;
   getAssetBalance(assetId: string): Promise<RgbAssetBalance>;
