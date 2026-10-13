@@ -135,17 +135,11 @@ around them.
 - **`burnAsset({ network, assetId, amount, burnRecipient, … })`** burns a BFA
   (bridged fungible asset) and returns `txid` and `transferId` after broadcast.
   `amount` is a positive u64 decimal string in base units; `network` MUST
-  match the connected RGB network. `burnRecipient` identifies the payout chain and address: `eip155:<decimal>`
-  with a nonzero 20-byte `0x` address, or `tron:<decimal>` with a nonzero
-  case-sensitive Base58Check address (version byte `41`). Supported Tron IDs
-  are mainnet `728126428`, Shasta `2494104990`, and Nile `3448148188`, following
-  [the Tron CAIP-2 profile](https://namespaces.chainagnostic.org/tron/caip2).
-  A wallet supporting Tron MUST advertise `"tron"` in `getInfo().burnRecipientNamespaces`;
-  dApps MUST check this before requesting a Tron burn. The field is optional
-  for older EVM-only wallets. The native proof recipient is 12 zero bytes
-  followed by the 20 account bytes, excluding Tron's version byte and checksum.
-  The payout chain remains approved operation metadata; it is not encoded in
-  these 32 recipient bytes. The wallet MUST validate the bridge route and show the asset,
+  match the connected RGB network. `burnRecipient` contains a CAIP-2 `chainId`
+  and native address, with validation and proof encoding defined in `RgbBurnRecipient`.
+  dApps MUST check `getInfo().burnRecipientNamespaces` (defaults to `["eip155"]`).
+  Wallets MUST reject unsupported chains or invalid addresses with `INVALID_PARAMS`
+  before confirmation. The wallet MUST validate the bridge route and show the asset,
   amount, destination and Bitcoin fee in its confirmation. A dApp MUST NOT
   automatically repeat a burn after a timeout.
 - **`getConsignment({ assetId, txid })`** returns the saved burn consignment
