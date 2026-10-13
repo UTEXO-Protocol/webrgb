@@ -40,6 +40,10 @@ if (!supports(info, "burnAsset") || !supports(info, "getConsignment") ||
     !provider.burnAsset || !provider.getConsignment) {
   throw new Error("This wallet does not support BFA burn proofs");
 }
+const namespace = args.burnRecipient.chainId.split(":")[0];
+if (!(info.burnRecipientNamespaces ?? ["eip155"]).includes(namespace)) {
+  throw new Error("Unsupported burn recipient namespace");
+}
 const burn = await provider.burnAsset(args); // RgbBurnAssetArgs
 await saveBurn(burn); // persist the result in your dApp
 const proof = await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid });

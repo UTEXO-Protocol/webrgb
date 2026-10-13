@@ -94,6 +94,8 @@ export interface RgbInfo {
    * `"RGB_LN"`. Test it with {@link supports} rather than assuming.
    */
   methods: RgbMethod[];
+  /** Supported payout namespaces, e.g. "eip155" or "tron"; omitted means ["eip155"]. */
+  burnRecipientNamespaces?: string[];
 }
 
 /** `true` when `info.methods` lists `method`. */
@@ -202,11 +204,21 @@ export interface RgbSendAssetResult {
   [key: string]: unknown;
 }
 
-/** EVM destination for a BFA burn; the chain is checked separately from the address. */
+/** Payout destination for a BFA burn; wallets validate the chain and address together. */
 export interface RgbBurnRecipient {
-  chainId: `eip155:${number}`;
-  /** 20-byte hex address, with a 0x prefix. */
-  address: `0x${string}`;
+  /**
+   * CAIP-2 chain ID, e.g. "eip155:1" (Ethereum), "eip155:42161" (Arbitrum),
+   * "tron:728126428" (Tron), "tron:2494104990" (Shasta), "tron:3448148188" (Nile).
+   */
+  chainId: string;
+  /**
+   * Native address: eip155 uses nonzero 20-byte 0x hex; tron uses nonzero,
+   * case-sensitive Base58Check with version 0x41 and a valid checksum.
+   * Both encode 12 zero bytes followed by 20 account bytes in the proof,
+   * excluding Tron's version and checksum. Other namespaces need their own
+   * validation and encoding. The payout chain remains separate approved metadata.
+   */
+  address: string;
 }
 
 export interface RgbBurnAssetArgs {
@@ -221,7 +233,7 @@ export interface RgbBurnAssetArgs {
   minConfirmations?: number;
 }
 
-/** Returned after broadcast; it does not report an EVM payout. */
+/** Returned after broadcast; it does not report a payout. */
 export interface RgbBurnAssetResult {
   transferId: string | number;
   txid: string;

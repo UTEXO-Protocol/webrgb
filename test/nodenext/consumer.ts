@@ -41,6 +41,8 @@ async function useBurn(
   if (!rgb.burnAsset || !rgb.getConsignment) return;
   const info = await rgb.getInfo();
   if (!supports(info, "burnAsset") || !supports(info, "getConsignment")) return;
+  const namespace = args.burnRecipient.chainId.split(":")[0];
+  if (!(info.burnRecipientNamespaces ?? ["eip155"]).includes(namespace)) return;
   const burn = await rgb.burnAsset(args);
   return rgb.getConsignment({ assetId: burn.assetId, txid: burn.txid });
 }

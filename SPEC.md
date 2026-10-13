@@ -135,8 +135,11 @@ around them.
 - **`burnAsset({ network, assetId, amount, burnRecipient, … })`** burns a BFA
   (bridged fungible asset) and returns `txid` and `transferId` after broadcast.
   `amount` is a positive u64 decimal string in base units; `network` MUST
-  match the connected RGB network. `burnRecipient` identifies the EVM chain
-  and address. The wallet MUST validate the bridge route and show the asset,
+  match the connected RGB network. `burnRecipient` contains a CAIP-2 `chainId`
+  and native address, with validation and proof encoding defined in `RgbBurnRecipient`.
+  dApps MUST check `getInfo().burnRecipientNamespaces` (defaults to `["eip155"]`).
+  Wallets MUST reject unsupported chains or invalid addresses with `INVALID_PARAMS`
+  before confirmation. The wallet MUST validate the bridge route and show the asset,
   amount, destination and Bitcoin fee in its confirmation. A dApp MUST NOT
   automatically repeat a burn after a timeout.
 - **`getConsignment({ assetId, txid })`** returns the saved burn consignment

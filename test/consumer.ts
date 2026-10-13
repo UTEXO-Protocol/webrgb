@@ -18,6 +18,7 @@ import type {
   RgbAsset,
   RgbBurnAssetArgs,
   RgbGetConsignmentResult,
+  RgbInfo,
   RgbSignMessageResult,
   RgbProvider,
   RgbProviderDetail,
@@ -96,12 +97,25 @@ async function useBurn(provider: RgbProvider): Promise<void> {
     feeRate: 2,
     minConfirmations: 3,
   };
+  const tron: RgbBurnAssetArgs = { ...args, burnRecipient: {
+    chainId: "tron:728126428", address: "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL",
+  } };
+  // Additional namespaces can define their own address validation and proof encoding.
+  const extended: RgbBurnAssetArgs = { ...args, burnRecipient: {
+    chainId: "cosmos:cosmoshub-4", address: "cosmos1t2uflqwqe0fsj0shcfkrvpukewcw40yjj6hdc0",
+  } };
+  const extendedInfo: RgbInfo = { ...info, burnRecipientNamespaces: ["eip155", "tron", "cosmos"] };
+  // @ts-expect-error addresses must be strings; format validation belongs to the wallet
+  const wrongAddress: RgbBurnAssetArgs = { ...args, burnRecipient: { chainId: "tron:728126428", address: 123 } };
+  void [tron, extended, extendedInfo, wrongAddress];
   // @ts-expect-error burn amounts must preserve all u64 digits as a string
   const imprecise: RgbBurnAssetArgs = { ...args, amount: 9007199254740993 };
-  // @ts-expect-error a recipient must name its EVM chain as well as its address
+  // @ts-expect-error a recipient must name its payout chain as well as its address
   const noChain: RgbBurnAssetArgs = { ...args, burnRecipient: { address: "0x11" } };
   void [imprecise, noChain];
 
+  const namespace = args.burnRecipient.chainId.split(":")[0];
+  if (!(info.burnRecipientNamespaces ?? ["eip155"]).includes(namespace)) return;
   const burn = await provider.burnAsset(args);
   const exactAmount: string = burn.amount;
   burn.minConfirmations.toFixed();

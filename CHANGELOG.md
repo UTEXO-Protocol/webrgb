@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `burnRecipientNamespaces` capability for supported payout address formats.
 - `witnessReceive()` provider method, types and mock invoice support.
 - Optional `signMessage(message)` method and mock signer callback.
 - Optional `burnAsset()` and `getConsignment()` types and specification for
@@ -17,6 +18,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Burn recipients accept CAIP-2 chain IDs and native addresses, with EVM and
+  Tron encoding profiles and room for additional namespaces.
 - Rename the UTEXO fork to `@utexo/webrgb`, starting at version `0.1.0`.
   WalletConnect is maintained in the separate `@utexo/webrgb-walletconnect` project.
 
