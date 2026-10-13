@@ -94,6 +94,8 @@ export interface RgbInfo {
    * `"RGB_LN"`. Test it with {@link supports} rather than assuming.
    */
   methods: RgbMethod[];
+  /** Payout address namespaces accepted by burnAsset. Absence does not imply Tron support. */
+  burnRecipientNamespaces?: ("eip155" | "tron")[];
 }
 
 /** `true` when `info.methods` lists `method`. */
@@ -202,12 +204,19 @@ export interface RgbSendAssetResult {
   [key: string]: unknown;
 }
 
-/** EVM destination for a BFA burn; the chain is checked separately from the address. */
-export interface RgbBurnRecipient {
-  chainId: `eip155:${number}`;
-  /** 20-byte hex address, with a 0x prefix. */
-  address: `0x${string}`;
-}
+/** Payout destination for a BFA burn; wallets validate the chain and address together. */
+export type RgbBurnRecipient =
+  | {
+      chainId: `eip155:${number}`;
+      /** Nonzero 20-byte hex address, with a 0x prefix. */
+      address: `0x${string}`;
+    }
+  | {
+      /** CAIP-2 decimal chain ID: mainnet, Shasta or Nile. */
+      chainId: "tron:728126428" | "tron:2494104990" | "tron:3448148188";
+      /** Nonzero Tron Base58Check address; case-sensitive, including its checksum. */
+      address: `T${string}`;
+    };
 
 export interface RgbBurnAssetArgs {
   /** Expected RGB network, checked against getInfo().network. */
@@ -221,7 +230,7 @@ export interface RgbBurnAssetArgs {
   minConfirmations?: number;
 }
 
-/** Returned after broadcast; it does not report an EVM payout. */
+/** Returned after broadcast; it does not report a payout. */
 export interface RgbBurnAssetResult {
   transferId: string | number;
   txid: string;

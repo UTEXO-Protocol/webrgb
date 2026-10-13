@@ -96,6 +96,14 @@ async function useBurn(provider: RgbProvider): Promise<void> {
     feeRate: 2,
     minConfirmations: 3,
   };
+  const tron: RgbBurnAssetArgs = { ...args, burnRecipient: {
+    chainId: "tron:728126428", address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+  } };
+  // @ts-expect-error Tron recipients must not use EVM address syntax
+  const wrongTron: RgbBurnAssetArgs = { ...args, burnRecipient: { chainId: "tron:728126428", address: "0x11" } };
+  // @ts-expect-error Unsupported payout namespace
+  const wrongChain: RgbBurnAssetArgs = { ...args, burnRecipient: { chainId: "bitcoin:1", address: "0x11" } };
+  void [tron, wrongTron, wrongChain];
   // @ts-expect-error burn amounts must preserve all u64 digits as a string
   const imprecise: RgbBurnAssetArgs = { ...args, amount: 9007199254740993 };
   // @ts-expect-error a recipient must name its EVM chain as well as its address
