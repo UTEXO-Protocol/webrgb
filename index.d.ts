@@ -214,9 +214,9 @@ export interface RgbBurnRecipient {
   /**
    * Native address: eip155 uses nonzero 20-byte 0x hex; tron uses nonzero,
    * case-sensitive Base58Check with version 0x41 and a valid checksum.
-   * Both encode 12 zero bytes followed by 20 account bytes in the proof,
-   * excluding Tron's version and checksum. Other namespaces need their own
-   * validation and encoding. The payout chain remains separate approved metadata.
+   * These are native address validation rules, not a proof encoding. The legacy
+   * raw-account profile and negotiated V1 destination commitments encode them
+   * differently; see SPEC.md §4.1. A namespace alone never selects a profile.
    */
   address: string;
 }
