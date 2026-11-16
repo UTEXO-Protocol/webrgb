@@ -235,14 +235,16 @@ one. Where a wallet and this document disagree, the wallet is what pages see —
 ## Invoice-scoped received mint validation (optional)
 
 `getReceivedMint({ invoice })` is a UTEXO extension for checking a prepared BFA
-mint before paying its EVM lock. Negotiate `getReceivedMint` in `getInfo().methods`
-and check the method exists. Existing providers do not have to implement it.
+mint before paying its EVM lock. Negotiate `getReceivedMint` in `getInfo().methods`,
+check `receivedMintVerificationVersion === 1`, and check the method exists.
+Existing providers do not have to implement it.
 This extension does not change native rgb-lib's recipient-only method signature.
 
 The request contains only the complete, unchanged RGB invoice. The wallet must
 verify it belongs to its active account, including the recipient, public key,
 expiry, assignment and transport data. A recipient ID alone is insufficient.
-The wallet refreshes and validates the received consignment and returns:
+The wallet refreshes incoming state, binds a natively checked mint to that invoice
+and its consignment, and returns:
 
 ```ts
 {
@@ -264,12 +266,22 @@ RGB transition ID and must not be compared to a gateway tracking operation ID.
 The result is `null` only while no validated mint is ready for that invoice.
 Expired or foreign invoices, rejected proofs, mismatches, unavailable wallets
 and transport failures reject; none may be converted to a pending result.
-This read may refresh incoming proof state, but must not allocate an invoice,
-create/sign/broadcast a transaction, pay, burn or approve a deposit.
+This read may progress incoming receipts, including normal acknowledgement and
+delivery of an already signed incoming transaction. It must not allocate an
+invoice, initiate or replay an outgoing send or burn, or approve/pay an EVM deposit.
+
+This result is not a promise that every time-dependent rule was checked again.
+For example, [stock BFA.8 retains a checked mint](https://github.com/UTEXO-Protocol/rgb-lib-bfa/blob/2f7b21d8637baad548504ea870deb2c0d4d0a37d/src/wallet/offline.rs#L3458-L3509)
+across subsequent reject-list changes so an existing lock can complete. Its
+refresh can use cached checked terms while waiting for that lock. Applications
+must not interpret a returned receipt as proof of current EVM connectivity,
+a newly accepted reject list, or settlement.
 
 The dApp must compare the validated asset, amount, lock ID, destination chain,
-lock contract and deadline to its intended operation, and revalidate immediately
-before paying after any asynchronous approval. A session, account, network,
+lock contract and deadline to its intended operation. Independently verify the
+current EVM chain, lock contract and exclusive block deadline, and request the
+receipt again immediately before paying after any asynchronous approval.
+A session, account, network,
 invoice or preparation change invalidates the prior result. Validation alone
 is not settlement acceptance. Native proof validation remains the wallet's
 responsibility; this package and its mock do not validate RGB proofs.

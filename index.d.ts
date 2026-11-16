@@ -97,6 +97,8 @@ export interface RgbInfo {
   methods: RgbMethod[];
   /** Supported payout namespaces, e.g. "eip155" or "tron"; omitted means ["eip155"]. */
   burnRecipientNamespaces?: string[];
+  /** Invoice-scoped received-mint contract version; also requires the method grant. */
+  receivedMintVerificationVersion?: 1;
 }
 
 /** `true` when `info.methods` lists `method`. */
@@ -391,9 +393,11 @@ export interface RgbProvider {
   /** Share a saved burn consignment for third-party verification, with consent. */
   getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
   /**
-   * Optional pre-deposit validation. Refresh and validate the owned invoice's
-   * consignment without creating, signing or paying a transaction. Null means
-   * not ready; authorization, validation and transport errors must reject.
+   * Optional pre-deposit inspection of an owned invoice's checked mint.
+   * Refresh may progress incoming receipts but never initiates or replays an
+   * outgoing payment. Stock RGB may retain earlier time-dependent checks;
+   * callers must check current lock-chain state before paying. Null means not
+   * ready; authorization, validation and transport errors must reject.
    */
   getReceivedMint?(args: RgbGetReceivedMintArgs): Promise<RgbReceivedMint | null>;
   listTransfers(assetId?: string): Promise<RgbTransferList>;

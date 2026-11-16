@@ -155,7 +155,8 @@ function useLegacyProvider(
 async function inspectPreparedMint(provider: RgbProvider, invoice: string): Promise<void> {
   // @ts-expect-error optional validation needs feature detection
   await provider.getReceivedMint({ invoice });
-  if (!supports(await provider.getInfo(), "getReceivedMint") || !provider.getReceivedMint) return;
+  const info = await provider.getInfo();
+  if (!supports(info, "getReceivedMint") || info.receivedMintVerificationVersion !== 1 || !provider.getReceivedMint) return;
   const received: RgbReceivedMint | null = await provider.getReceivedMint({ invoice });
   if (received === null) return;
   BigInt(received.amount);

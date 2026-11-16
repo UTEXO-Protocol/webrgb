@@ -143,7 +143,9 @@ export function createMockProvider(options = {}) {
 
     async getInfo() {
       await call("getInfo", []);
-      return { ready, network, protocol, methods: [...methods] };
+      return { ready, network, protocol, methods: [...methods],
+        ...(options.getReceivedMint && methods.includes("getReceivedMint")
+          ? { receivedMintVerificationVersion: /** @type {const} */ (1) } : {}) };
     },
 
     async getAddress() {
