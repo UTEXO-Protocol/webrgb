@@ -136,7 +136,8 @@ around them.
   (bridged fungible asset) and returns `txid` and `transferId` after broadcast.
   `amount` is a positive u64 decimal string in base units; `network` MUST
   match the connected RGB network. `burnRecipient` contains a CAIP-2 `chainId`
-  and native address, with validation and proof encoding defined in `RgbBurnRecipient`.
+  and native address, with validation defined in `RgbBurnRecipient`. Proof
+  encoding depends on the separately agreed destination profile (§4.1).
   dApps MUST check `getInfo().burnRecipientNamespaces` (defaults to `["eip155"]`).
   Wallets MUST reject unsupported chains or invalid addresses with `INVALID_PARAMS`
   before confirmation. The wallet MUST validate the bridge route and show the asset,
@@ -171,6 +172,50 @@ around them.
   confirmation MUST show the figure actually encoded.
 - **`payLnInvoice(invoice)`** pays a BOLT-11 invoice that carries an asset. A
   plain Bitcoin invoice SHOULD be refused — that is `webln.sendPayment()`.
+
+### 4.1 BFA destination encoding profiles
+
+`RgbBurnRecipient` describes a native payout address. It does not by itself
+select the bytes committed by a burn. Namespace support and destination-profile
+support are separate capabilities.
+
+The **legacy raw-account profile** encodes 12 zero bytes followed by the
+20-byte account into the proof. For Tron, validate the native Base58Check
+address first, then omit its `0x41` version byte and checksum in this legacy
+encoding only. The payout chain remains separately approved metadata; the raw
+account value does not commit to the destination chain or endpoint.
+
+The **negotiated V1 destination extension** used by UTEXO bridge integrations
+commits to a different preimage. These integrations require
+`getInfo().burnDestinationVersion === 1` and an exact advertised
+`burnDestinationRoutes` chain/`dstEid` pair. Their request, result and portable
+proof export carry `burnDestination` with `version: 1`, `destinationChainId`,
+`dstEid` and hex-encoded `recipient` bytes. For the supported address formats:
+
+- EVM recipients contain exactly the 20 native account bytes.
+- Tron recipients contain exactly the 21 decoded native payload bytes, including
+  the leading `0x41` version byte and excluding the Base58Check checksum.
+
+Neither recipient is padded to 32 bytes before its dynamic-bytes hash. The
+32-byte V1 burn commitment is the hashStruct:
+
+```text
+typeHash = keccak256(UTF8("UtexoBurnDestinationV1(uint64 destinationChainId,uint32 dstEid,bytes recipient)"))
+commitment = keccak256(abi.encode(typeHash, uint64(destinationChainId), uint32(dstEid), keccak256(recipientBytes)))
+```
+
+This is not an EIP-712 domain/signature digest. The commitment binds the chain,
+endpoint and exact recipient bytes; it replaces the legacy raw-account value
+in the burn proof. Integrations MUST independently validate the native address,
+exact route and preimage before confirmation, and retain the same preimage
+through the durable result and proof export. They MUST NOT infer an endpoint
+from an address, treat namespace support as V1 support, or silently fall back
+to legacy encoding when V1 is required.
+
+V1 fields and hashing are application-owned extensions to this package's base
+interfaces. This package does not implement a V1 encoder, advertise a route
+registry, or qualify bridge payouts. Supporting the base BFA methods alone
+does not establish support for that extension or any payout network.
 
 ## 5. Events
 

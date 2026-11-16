@@ -30,7 +30,10 @@ For witness receiving, use `provider.witnessReceive({ assetId, amount: 5 })`.
 It returns the same fields; the sender creates the receiving output.
 
 `issueAsset()` creates a new asset; it is not used to receive an existing
-bridge asset. For burn, check capabilities before calling the optional methods:
+bridge asset. For burn, check capabilities before calling the optional methods.
+The following example uses the base interface only. A bridge requiring V1 must
+also negotiate and supply its destination extension before calling `burnAsset`,
+as described below; namespace support alone is insufficient:
 
 ```ts
 import { supports } from "@utexo/webrgb";
@@ -55,6 +58,33 @@ and any payout. Track the burn with
 `getTransferStatus(burn.transferId, burn.assetId)`. Proof retrieval can be
 retried using the saved txid. If a burn times out, check wallet history before
 requesting another burn.
+
+### Bridge V1 destination commitments
+
+The base `RgbBurnRecipient.address` is a native address, not a universal proof
+encoding. The legacy raw-account profile pads a 20-byte account with 12 zero
+bytes; for Tron it drops the validated native version byte. That legacy value
+does not bind a payout chain or endpoint.
+
+For a V1 bridge, require the application's `burnDestinationVersion: 1`
+extension and match the exact `chainId`/`dstEid` in `burnDestinationRoutes`.
+Construct the application-owned `burnDestination` preimage from the approved
+route and native address. EVM uses 20 account bytes; Tron uses the full 21-byte
+decoded payload including `0x41`, with its checksum excluded. V1 hashes these
+as dynamic recipient bytes and binds the destination chain and endpoint in a
+32-byte commitment; see [SPEC.md §4.1](./SPEC.md#41-bfa-destination-encoding-profiles)
+for the exact hashStruct. Do not pad or truncate the Tron payload to the legacy
+account encoding, infer an endpoint, or fall back when the wallet lacks V1.
+
+Persist the exact approved preimage and burn result before later submission or
+proof sharing. Match that preimage in responses and portable exports, and use
+the saved proof for recovery rather than repeating the burn. Capability
+negotiation and commitment validation do not prove funded payout settlement.
+
+These V1 fields and encoding are supplied by the wallet/bridge integration;
+this package's runtime and base type signatures do not implement or advertise
+them. Use the integration's explicit V1 types, encoder, route policy and
+independent commitment vectors.
 
 To sign a message, check support and request a signature:
 
