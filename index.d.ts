@@ -74,6 +74,7 @@ export type RgbMethod =
   | "sendAsset"
   | "burnAsset"
   | "getConsignment"
+  | "getReceivedMint"
   | "listTransfers"
   | "getTransferStatus"
   | "decodeRgbInvoice"
@@ -133,6 +134,34 @@ export interface RgbBlindReceiveResult {
 
 export type RgbWitnessReceiveArgs = RgbBlindReceiveArgs;
 export type RgbWitnessReceiveResult = RgbBlindReceiveResult;
+
+/** Exact wallet-created invoice, including its recipient, public key and expiry. */
+export interface RgbGetReceivedMintArgs {
+  invoice: string;
+}
+
+/** Wallet-validated pre-deposit mint commitment. All integers are decimal strings. */
+export interface RgbReceivedMint {
+  /** The unchanged invoice supplied to getReceivedMint. */
+  invoice: string;
+  recipientId: string;
+  /** Derived from the validated consignment, including for any-asset invoices. */
+  assetId: string;
+  /** Same network identifier as getInfo().network. */
+  network: string;
+  /** Bitcoin transaction and RGB transition identifiers: lowercase 64-character hex. */
+  txid: string;
+  opid: string;
+  /** Lowercase 64-character hex EVM lock identifier; not a gateway operation ID. */
+  lockId: string;
+  /** Net RGB mint amount in the asset's base units, not the gross EVM deposit. */
+  amount: string;
+  /** Exclusive lock-chain block deadline for deposit inclusion. */
+  beforeBlock: string;
+  evmChainId: string;
+  /** Lowercase 0x-prefixed 20-byte lock contract address. */
+  bridgeContract: string;
+}
 
 export interface RgbIssueAssetArgs {
   /** Only `"nia"` is served today; `"uda"` and `"cfa"` reject with METHOD_NOT_SUPPORTED. */
@@ -361,6 +390,12 @@ export interface RgbProvider {
   burnAsset?(args: RgbBurnAssetArgs): Promise<RgbBurnAssetResult>;
   /** Share a saved burn consignment for third-party verification, with consent. */
   getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
+  /**
+   * Optional pre-deposit validation. Refresh and validate the owned invoice's
+   * consignment without creating, signing or paying a transaction. Null means
+   * not ready; authorization, validation and transport errors must reject.
+   */
+  getReceivedMint?(args: RgbGetReceivedMintArgs): Promise<RgbReceivedMint | null>;
   listTransfers(assetId?: string): Promise<RgbTransferList>;
   getTransferStatus(
     transferId: string | number,

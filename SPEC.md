@@ -230,3 +230,46 @@ This document and `index.d.ts` version together. A method added to the
 interface is a minor version of the package; a changed signature is a major
 one. Where a wallet and this document disagree, the wallet is what pages see —
 [open an issue](https://github.com/UTEXO-Protocol/webrgb/issues).
+
+
+## Invoice-scoped received mint validation (optional)
+
+`getReceivedMint({ invoice })` is a UTEXO extension for checking a prepared BFA
+mint before paying its EVM lock. Negotiate `getReceivedMint` in `getInfo().methods`
+and check the method exists. Existing providers do not have to implement it.
+This extension does not change native rgb-lib's recipient-only method signature.
+
+The request contains only the complete, unchanged RGB invoice. The wallet must
+verify it belongs to its active account, including the recipient, public key,
+expiry, assignment and transport data. A recipient ID alone is insufficient.
+The wallet refreshes and validates the received consignment and returns:
+
+```ts
+{
+  invoice, recipientId, assetId, network, txid, opid, lockId,
+  amount, beforeBlock, evmChainId, bridgeContract
+}
+```
+
+`invoice` exactly echoes the request. `assetId` comes from the validated proof,
+including for an any-asset invoice; an asset-specific invoice must match it.
+`network` matches `getInfo().network`. `txid`, `opid` and `lockId` are lowercase
+64-character hexadecimal strings without a prefix. `bridgeContract` is a
+lowercase, `0x`-prefixed 20-byte address. `amount`, `beforeBlock` and `evmChainId`
+are canonical unsigned decimal strings, preserving integer precision over JSON.
+`amount` is the net RGB amount, not the gross EVM deposit. `beforeBlock` is the
+exclusive block deadline for deposit inclusion on the lock chain. `opid` is an
+RGB transition ID and must not be compared to a gateway tracking operation ID.
+
+The result is `null` only while no validated mint is ready for that invoice.
+Expired or foreign invoices, rejected proofs, mismatches, unavailable wallets
+and transport failures reject; none may be converted to a pending result.
+This read may refresh incoming proof state, but must not allocate an invoice,
+create/sign/broadcast a transaction, pay, burn or approve a deposit.
+
+The dApp must compare the validated asset, amount, lock ID, destination chain,
+lock contract and deadline to its intended operation, and revalidate immediately
+before paying after any asynchronous approval. A session, account, network,
+invoice or preparation change invalidates the prior result. Validation alone
+is not settlement acceptance. Native proof validation remains the wallet's
+responsibility; this package and its mock do not validate RGB proofs.

@@ -636,3 +636,29 @@ describe("conformance", () => {
     assert.match(text, /conformant: \d+ passed/);
   });
 });
+
+
+describe("optional received mint fixture", () => {
+  it("does not advertise native validation without an explicit fixture", async () => {
+    const provider = createMockProvider();
+    await provider.enable();
+    assert.equal((await provider.getInfo()).methods.includes("getReceivedMint"), false);
+    await assert.rejects(provider.getReceivedMint({ invoice: "rgb:test" }), { code: "METHOD_NOT_SUPPORTED" });
+  });
+  it("preserves pending and validation errors after checking authorization", async () => {
+    const invoice = "rgb:exact?pk=abc&expiry=123";
+    let calls = 0;
+    const provider = createMockProvider({ getReceivedMint: async (args) => {
+      assert.equal(args.invoice, invoice);
+      calls++;
+      if (calls === 1) return null;
+      throw Object.assign(new Error("Invalid proof"), { code: "INVALID_PARAMS" });
+    } });
+    await assert.rejects(provider.getReceivedMint({ invoice }), { code: "NOT_ENABLED" });
+    await provider.enable();
+    assert.equal((await provider.getInfo()).methods.includes("getReceivedMint"), true);
+    assert.equal(await provider.getReceivedMint({ invoice }), null);
+    await assert.rejects(provider.getReceivedMint({ invoice }), { code: "INVALID_PARAMS" });
+    assert.equal(calls, 2);
+  });
+});

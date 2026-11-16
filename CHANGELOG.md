@@ -8,6 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Optional invoice-scoped `getReceivedMint` types for wallet-validated pre-deposit commitments.
+
 - `burnRecipientNamespaces` capability for supported payout address formats.
 - `witnessReceive()` provider method, types and mock invoice support.
 - Optional `signMessage(message)` method and mock signer callback.

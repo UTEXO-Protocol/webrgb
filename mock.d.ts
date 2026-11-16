@@ -13,6 +13,8 @@ import type {
   RgbProvider,
   RgbProviderInfo,
   RgbSignMessageResult,
+  RgbGetReceivedMintArgs,
+  RgbReceivedMint,
   RgbTransfer,
 } from "./index.js";
 
@@ -30,6 +32,8 @@ export interface MockProviderOptions {
   rejectConfirmations?: boolean;
   /** Optional test signer; runs after access, argument and confirmation checks. */
   signMessage?: (message: string) => Promise<RgbSignMessageResult>;
+  /** Test fixture only: the mock cannot validate native RGB consignments. */
+  getReceivedMint?: (args: RgbGetReceivedMintArgs) => Promise<RgbReceivedMint | null>;
   /** Assets the wallet starts with. Balances default to 0. */
   assets?: Array<RgbAsset & { balance?: number }>;
   /** Delay every call by this many milliseconds, to shake out missing awaits. */

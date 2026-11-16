@@ -49,6 +49,7 @@ export function createMockProvider(options = {}) {
     ...BASE_METHODS,
     ...(protocol === "RGB_LN" ? LN_METHODS : []),
     ...(options.signMessage ? ["signMessage"] : []),
+    ...(options.getReceivedMint ? ["getReceivedMint"] : []),
   ];
 
   /** @type {Map<string, { asset: import("./index.js").RgbAsset, balance: number }>} */
@@ -150,6 +151,15 @@ export function createMockProvider(options = {}) {
       return { address: `bcrt1qmock${String(nextId()).padStart(6, "0")}` };
     },
 
+    /** @param {import("./index.js").RgbGetReceivedMintArgs} args */
+    async getReceivedMint(args) {
+      await call("getReceivedMint", [args]);
+      if (!options.getReceivedMint) throw fail("No mint validation fixture configured", "METHOD_NOT_SUPPORTED");
+      if (!args || typeof args.invoice !== "string" || !args.invoice.startsWith("rgb:") || args.invoice.length > 8192) {
+        throw fail("getReceivedMint requires the full invoice", "INVALID_PARAMS");
+      }
+      return options.getReceivedMint(args);
+    },
     /** @param {string} message */
     async signMessage(message) {
       await call("signMessage", [message]);
