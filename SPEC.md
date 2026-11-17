@@ -159,11 +159,15 @@ around them.
   method and invoice, that the invoice belongs to the active account, and
   that its recipient, public key, expiry, assignment and transport data match
   the wallet's record. A recipient ID alone is insufficient.
+  The invoice MUST name an asset; an any-asset invoice MUST reject with
+  `INVALID_PARAMS`.
   The wallet MUST refresh incoming state and bind the checked mint and its
   consignment to that exact invoice. The result is
   [`RgbReceivedMint`](./index.d.ts), with the original invoice, the wallet's
-  network as returned by `getInfo()`, and the asset from the validated proof.
-  An asset-specific invoice MUST match the proof's asset.
+  network as returned by `getInfo()`, and `assetId` equal to the invoice's
+  asset and matched by the validated proof. `txid` MAY be absent before the
+  lock is paid; `lockId` already commits to the witness transaction. Its
+  absence MUST NOT turn an otherwise checked mint into a pending result.
   The method MUST return `null` only while a valid, authorized invoice has
   no checked mint ready. It MUST reject expired or foreign invoices,
   rejected proofs, mismatches, unavailable wallets and transport failures.

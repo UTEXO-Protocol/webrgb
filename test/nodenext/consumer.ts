@@ -11,7 +11,12 @@ async function main(): Promise<void> {
   const info: RgbInfo = await rgb.getInfo();
   if (supports(info, "getReceivedMint") && rgb.getReceivedMint) {
     const receipt = await rgb.getReceivedMint({ invoice: "rgb:owned" });
-    if (receipt) BigInt(receipt.beforeBlock);
+    if (receipt) {
+      BigInt(receipt.beforeBlock);
+      receipt.txid?.toUpperCase();
+      // @ts-expect-error a checked mint may not have a witness transaction ID yet
+      receipt.txid.toUpperCase();
+    }
   }
   const { invoice } = await rgb.witnessReceive();
   invoice.toUpperCase();

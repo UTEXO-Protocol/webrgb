@@ -162,6 +162,22 @@ async function inspectPreparedMint(provider: RgbProvider, invoice: string): Prom
   BigInt(received.amount);
   BigInt(received.beforeBlock);
   received.assetId.toUpperCase();
+  received.txid?.toUpperCase();
+  // @ts-expect-error a checked mint may not have a witness transaction ID yet
+  received.txid.toUpperCase();
+  const withoutTxid: RgbReceivedMint = {
+    invoice: received.invoice,
+    recipientId: received.recipientId,
+    assetId: received.assetId,
+    network: received.network,
+    opid: received.opid,
+    lockId: received.lockId,
+    amount: received.amount,
+    beforeBlock: received.beforeBlock,
+    evmChainId: received.evmChainId,
+    bridgeContract: received.bridgeContract,
+  };
+  withoutTxid.lockId.toUpperCase();
   // @ts-expect-error recipient-only lookup does not bind the exact invoice
   await provider.getReceivedMint({ recipientId: "utxob:seal" });
   // @ts-expect-error a bare string is not the negotiated request object

@@ -6,6 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Allow a checked `getReceivedMint` receipt to omit `txid` before the EVM
+  lock is paid. Require an asset-specific invoice and proof-bound `assetId`
+  so inspection does not depend on post-payment transfer history.
+
 ### Added
 
 - Optional invoice-scoped `getReceivedMint` types for wallet-validated pre-deposit commitments.
