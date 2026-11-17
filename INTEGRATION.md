@@ -99,8 +99,9 @@ The wallet asks for approval. Your backend can verify the returned signature.
 ### Checking a prepared mint
 
 Request `getReceivedMint` when connecting if your transport negotiates method
-access. Enable the provider, create the invoice and pass it unchanged to the
-bridge to prepare the mint. Once preparation starts, check the wallet's result:
+access. Enable the provider and create an invoice with the selected `assetId`;
+an any-asset invoice is rejected. Pass the invoice unchanged to the bridge to
+prepare the mint, then check the wallet's result:
 
 ```ts
 import { supports } from "@utexo/webrgb";
@@ -109,8 +110,14 @@ const info = await provider.getInfo();
 if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) {
   throw new Error("This wallet cannot check a prepared mint");
 }
+const { invoice } = await provider.witnessReceive({ assetId });
+await prepareMint(invoice); // application-specific bridge preparation
 const receipt = await provider.getReceivedMint({ invoice });
 ```
+
+A receipt can omit `txid` until the wallet links the receive to its witness
+transaction, which may happen only after the lock is paid. Do not wait for
+`txid` before payment: match `lockId`, which already commits to that transaction.
 
 A `null` result is pending. Poll the same invoice without requesting another
 confirmation. Handle rejected calls separately. Before paying:
@@ -154,6 +161,9 @@ approved dApp. Connection approval does not approve a burn or the sharing of
 a consignment or message signing; each method follows the consent rules in
 the specification.
 
-For `getReceivedMint`, validate and bind the full invoice before using any
-native recipient-only lookup. Native proof validation is the wallet's
+For `getReceivedMint`, validate and bind the full, asset-specific invoice before
+using any native recipient-only lookup. Reject any-asset invoices with
+`INVALID_PARAMS`. The validated consignment must match the invoice's asset;
+do not wait for an asset association or transaction ID in transfer history
+before returning the checked mint. Native proof validation is the wallet's
 responsibility. The WebRGB package and its mock do not validate RGB proofs.

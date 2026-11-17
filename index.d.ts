@@ -135,7 +135,7 @@ export interface RgbBlindReceiveResult {
 export type RgbWitnessReceiveArgs = RgbBlindReceiveArgs;
 export type RgbWitnessReceiveResult = RgbBlindReceiveResult;
 
-/** Exact wallet-created invoice, including its recipient, public key and expiry. */
+/** Exact wallet-created, asset-specific invoice, including its recipient, public key and expiry. */
 export interface RgbGetReceivedMintArgs {
   invoice: string;
 }
@@ -145,12 +145,16 @@ export interface RgbReceivedMint {
   /** The unchanged invoice supplied to getReceivedMint. */
   invoice: string;
   recipientId: string;
-  /** Derived from the validated consignment, including for any-asset invoices. */
+  /** The asset the invoice names, matched by the validated consignment. */
   assetId: string;
   /** Same network identifier as getInfo().network. */
   network: string;
-  /** Bitcoin transaction ID: lowercase 64-character hex. */
-  txid: string;
+  /**
+   * Witness transaction ID: lowercase 64-character hex. May be absent until
+   * the wallet links the receive to it, which can happen only after the lock
+   * is paid. The lockId already commits to this transaction.
+   */
+  txid?: string;
   /** RGB transition ID, not a gateway operation ID: lowercase 64-character hex. */
   opid: string;
   /** EVM lock identifier: lowercase 64-character hex. */

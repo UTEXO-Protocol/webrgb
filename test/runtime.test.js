@@ -639,6 +639,40 @@ describe("conformance", () => {
 
 
 describe("optional received mint fixture", () => {
+  it("returns a checked receipt before its witness transaction is linked", async () => {
+    const invoice = "rgb:asset/~/bcrt:utxob:owned";
+    const receipt = {
+      invoice,
+      recipientId: "bcrt:utxob:owned",
+      assetId: "rgb:asset",
+      network: "regtest",
+      opid: "a".repeat(64),
+      lockId: "b".repeat(64),
+      amount: "9007199254740993",
+      beforeBlock: "9007199254740994",
+      evmChainId: "42161",
+      bridgeContract: `0x${"c".repeat(40)}`,
+    };
+    let ready = false;
+    let linked = false;
+    const provider = createMockProvider({
+      rejectConfirmations: true,
+      getReceivedMint: async () => !ready ? null : linked
+        ? { ...receipt, txid: "d".repeat(64) }
+        : receipt,
+    });
+    await provider.enable();
+    assert.equal(await provider.getReceivedMint({ invoice }), null);
+    ready = true;
+    const checked = await provider.getReceivedMint({ invoice });
+    assert.deepEqual(checked, receipt);
+    assert.equal(Object.hasOwn(checked, "txid"), false);
+    assert.deepEqual(JSON.parse(JSON.stringify(checked)), receipt);
+    linked = true;
+    assert.deepEqual(await provider.getReceivedMint({ invoice }), {
+      ...receipt, txid: "d".repeat(64),
+    });
+  });
   it("does not advertise native validation without an explicit fixture", async () => {
     const provider = createMockProvider();
     await provider.enable();
