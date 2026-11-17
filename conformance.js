@@ -137,7 +137,7 @@ export async function runConformance(provider, options = {}) {
 
   // An optional method may be absent. Inspect advertised functions without
   // invoking them: these methods require consent or can disclose wallet data.
-  for (const method of /** @type {const} */ (["burnAsset", "getConsignment", "signMessage", "getReceivedMint"])) {
+  for (const method of /** @type {const} */ (["burnAsset", "getConsignment", "signMessage", "getReceivedMint", "createUtxos", "getBtcBalance", "refresh", "getAssetMetadata"])) {
     await check(`${method}-available`, () => {
       if (!info || !supports(info, method)) return `the wallet does not serve ${method}`;
       assert(typeof provider[method] === "function", `${method} is advertised but missing`);
@@ -243,6 +243,60 @@ export async function runConformance(provider, options = {}) {
     return "the wallet decoded a malformed invoice instead of rejecting";
   });
 
+  await check("getBtcBalance-shape", async () => {
+    if (!info || !supports(info, "getBtcBalance")) return "the wallet does not serve getBtcBalance";
+    assert(typeof provider.getBtcBalance === "function", "getBtcBalance is missing");
+    const balance = await provider.getBtcBalance();
+    for (const side of /** @type {const} */ (["vanilla", "colored"])) {
+      for (const field of /** @type {const} */ (["settled", "future", "spendable"])) {
+        const value = balance?.[side]?.[field];
+        assert(Number.isSafeInteger(value) && value >= 0, `${side}.${field} is not safe nonnegative sats`);
+      }
+    }
+    assert(balance.freeColorableUtxos === null ||
+      (Number.isSafeInteger(balance.freeColorableUtxos) && balance.freeColorableUtxos >= 0),
+      "freeColorableUtxos is neither a count nor null");
+    const leak = findOutpoint(balance);
+    assert(!leak, `getBtcBalance exposes an outpoint (${leak})`);
+  });
+
+  await check("getAssetMetadata-miss", async () => {
+    if (!info || !supports(info, "getAssetMetadata")) return "the wallet does not serve getAssetMetadata";
+    assert(typeof provider.getAssetMetadata === "function", "getAssetMetadata is missing");
+    try {
+      await provider.getAssetMetadata("rgb:webrgb-conformance-no-such-asset");
+    } catch (error) {
+      assert(providerErrorCode(error) === "ASSET_NOT_FOUND", "unknown metadata must reject with ASSET_NOT_FOUND");
+      return;
+    }
+    throw new Error("getAssetMetadata answered for an unknown asset");
+  });
+
+  await check("getAssetMetadata-shape", async () => {
+    if (!info || !supports(info, "getAssetMetadata")) return "the wallet does not serve getAssetMetadata";
+    if (!assetId) return "the wallet holds no asset and none was passed";
+    assert(typeof provider.getAssetMetadata === "function", "getAssetMetadata is missing");
+    const meta = await provider.getAssetMetadata(assetId);
+    assert(meta?.assetId === assetId, "metadata assetId does not match");
+    assert(typeof meta.schema === "string", "schema is not a string");
+    assert(typeof meta.name === "string", "name is not a string");
+    assert(meta.ticker === null || typeof meta.ticker === "string", "invalid ticker");
+    assert(meta.details === null || typeof meta.details === "string", "invalid details");
+    assert(Number.isInteger(meta.precision) && meta.precision >= 0 && meta.precision <= 255, "invalid precision");
+    assert(Number.isSafeInteger(meta.timestamp), "invalid timestamp");
+    assert(typeof meta.issuedSupply === "string" && /^(0|[1-9]\d{0,19})$/.test(meta.issuedSupply) &&
+      BigInt(meta.issuedSupply) <= 18446744073709551615n, "issuedSupply is not an exact u64 string");
+    assert(meta.media === null || (typeof meta.media?.mime === "string" &&
+      typeof meta.media?.digest === "string"), "invalid media metadata");
+  });
+
+  await check("refresh-shape", async () => {
+    if (!info || !supports(info, "refresh")) return "the wallet does not serve refresh";
+    assert(typeof provider.refresh === "function", "refresh is missing");
+    const refreshed = await provider.refresh();
+    assert(typeof refreshed?.refreshed === "boolean", "refresh did not return a boolean result");
+  });
+
   await check("events-register", () => {
     /** @param {import("./index.js").RgbTransfer} _transfer */
     const listener = (_transfer) => {};
@@ -278,4 +332,21 @@ export function formatReport(report) {
       `${report.failed} failed, ${report.skipped} skipped`,
   );
   return lines.join("\n");
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} [path]
+ * @returns {string | undefined}
+ */
+function findOutpoint(value, path = "") {
+  if (typeof value === "string") return /^[0-9a-f]{64}:\d+$/i.test(value) ? path || "(root)" : undefined;
+  if (!value || typeof value !== "object") return undefined;
+  for (const [key, inner] of Object.entries(value)) {
+    const at = path ? `${path}.${key}` : key;
+    if (/^(outpoints?|txid|vout|utxos|unspents)$/i.test(key)) return at;
+    const found = findOutpoint(inner, at);
+    if (found) return found;
+  }
+  return undefined;
 }

@@ -94,31 +94,40 @@ async function useBurn(provider: RgbProvider): Promise<void> {
     network: info.network,
     assetId: "rgb:bfa",
     amount: "18446744073709551615",
-    burnRecipient: { chainId: "eip155:31337", address: `0x${"11".repeat(20)}` },
+    burnDestination: { chainId: "eip155:31337", dstEid: 0, address: `0x${"11".repeat(20)}` },
     feeRate: 2,
     minConfirmations: 3,
   };
-  const tron: RgbBurnAssetArgs = { ...args, burnRecipient: {
-    chainId: "tron:728126428", address: "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL",
+  const tron: RgbBurnAssetArgs = { ...args, burnDestination: {
+    chainId: "tron:728126428", dstEid: 30420, address: "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL",
   } };
-  // Additional namespaces can define their own address validation and proof encoding.
-  const extended: RgbBurnAssetArgs = { ...args, burnRecipient: {
-    chainId: "cosmos:cosmoshub-4", address: "cosmos1t2uflqwqe0fsj0shcfkrvpukewcw40yjj6hdc0",
+  // Unknown namespaces remain representable; wallets must reject unsupported routes.
+  const extended: RgbBurnAssetArgs = { ...args, burnDestination: {
+    chainId: "cosmos:cosmoshub-4", dstEid: 100, address: "cosmos1t2uflqwqe0fsj0shcfkrvpukewcw40yjj6hdc0",
   } };
   const extendedInfo: RgbInfo = { ...info, burnRecipientNamespaces: ["eip155", "tron", "cosmos"] };
   // @ts-expect-error addresses must be strings; format validation belongs to the wallet
-  const wrongAddress: RgbBurnAssetArgs = { ...args, burnRecipient: { chainId: "tron:728126428", address: 123 } };
+  const wrongAddress: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "tron:728126428", dstEid: 30420, address: 123 } };
   void [tron, extended, extendedInfo, wrongAddress];
   // @ts-expect-error burn amounts must preserve all u64 digits as a string
   const imprecise: RgbBurnAssetArgs = { ...args, amount: 9007199254740993 };
   // @ts-expect-error a recipient must name its payout chain as well as its address
-  const noChain: RgbBurnAssetArgs = { ...args, burnRecipient: { address: "0x11" } };
+  const noChain: RgbBurnAssetArgs = { ...args, burnDestination: { address: "0x11" } };
   void [imprecise, noChain];
+  // @ts-expect-error the endpoint must be explicit, including zero for direct payout
+  const noEndpoint: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "eip155:137", address: "0x11" } };
+  // @ts-expect-error the old recipient-only request is not this contract
+  const legacy: RgbBurnAssetArgs = { network: info.network, assetId: "rgb:bfa", amount: "1", burnRecipient: { chainId: "eip155:1", address: "0x11" } };
+  // @ts-expect-error callers send native addresses, not a second encoded preimage
+  const duplicated: RgbBurnAssetArgs = { ...args, burnDestination: { ...args.burnDestination, destinationChainId: 137 } };
+  void [noEndpoint, legacy, duplicated];
 
-  const namespace = args.burnRecipient.chainId.split(":")[0];
+
+  const namespace = args.burnDestination.chainId.split(":")[0];
   if (!(info.burnRecipientNamespaces ?? ["eip155"]).includes(namespace)) return;
   const burn = await provider.burnAsset(args);
   const exactAmount: string = burn.amount;
+  burn.burnDestination.dstEid.toFixed();
   burn.minConfirmations.toFixed();
   const proof: RgbGetConsignmentResult = await provider.getConsignment({
     assetId: burn.assetId, txid: burn.txid,
@@ -143,7 +152,7 @@ async function useSignMessage(provider: RgbProvider): Promise<void> {
 }
 
 function useLegacyProvider(
-  legacy: Omit<RgbProvider, "burnAsset" | "getConsignment" | "signMessage" | "getReceivedMint">,
+  legacy: Omit<RgbProvider, "burnAsset" | "getConsignment" | "signMessage" | "getReceivedMint" | "createUtxos" | "getBtcBalance" | "refresh" | "getAssetMetadata">,
   args: RgbBurnAssetArgs,
 ): void {
   // Adding the extension must not require an existing wallet to implement it.
@@ -272,3 +281,28 @@ void handle;
 void useMockAndConformance;
 void asError;
 void RGB_ERROR_CODES;
+
+async function useWalletMaintenance(provider: RgbProvider): Promise<void> {
+  const info = await provider.getInfo();
+  // @ts-expect-error new optional methods require feature detection
+  await provider.createUtxos();
+  if (supports(info, "createUtxos") && provider.createUtxos) {
+    const created = await provider.createUtxos({ num: 3, size: 3000, feeRate: 2 });
+    created.created.toFixed();
+  }
+  if (supports(info, "getBtcBalance") && provider.getBtcBalance) {
+    (await provider.getBtcBalance()).freeColorableUtxos?.toFixed();
+  }
+  if (supports(info, "refresh") && provider.refresh) {
+    const changed: boolean = (await provider.refresh("rgb:x")).refreshed;
+    void changed;
+  }
+  if (supports(info, "getAssetMetadata") && provider.getAssetMetadata) {
+    const metadata = await provider.getAssetMetadata("rgb:x");
+    BigInt(metadata.issuedSupply);
+    // @ts-expect-error u64 supply is an exact decimal string
+    const rounded: number = metadata.issuedSupply;
+    void rounded;
+  }
+}
+void useWalletMaintenance;

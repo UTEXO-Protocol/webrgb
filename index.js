@@ -11,6 +11,7 @@ export const RGB_ERROR_CODES = Object.freeze([
   "METHOD_NOT_SUPPORTED",
   "INVALID_PARAMS",
   "ASSET_NOT_FOUND",
+  "NO_AVAILABLE_UTXOS",
   "INTERNAL_ERROR",
 ]);
 

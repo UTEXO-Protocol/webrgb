@@ -30,63 +30,100 @@ For witness receiving, use `provider.witnessReceive({ assetId, amount: 5 })`.
 It returns the same fields; the sender creates the receiving output.
 
 `issueAsset()` creates a new asset; it is not used to receive an existing
-bridge asset. For burn, check capabilities before calling the optional methods.
-The following example uses the base interface only. A bridge requiring V1 must
-also negotiate and supply its destination extension before calling `burnAsset`,
-as described below; namespace support alone is insufficient:
+bridge asset. A burn caller uses the single-destination contract:
 
 ```ts
-import { supports } from "@utexo/webrgb";
+import { supports, type RgbBurnAssetArgs } from "@utexo/webrgb";
 
 const info = await provider.getInfo();
 if (!supports(info, "burnAsset") || !supports(info, "getConsignment") ||
     !provider.burnAsset || !provider.getConsignment) {
   throw new Error("This wallet does not support BFA burn proofs");
 }
-const namespace = args.burnRecipient.chainId.split(":")[0];
+const args: RgbBurnAssetArgs = {
+  network: info.network,
+  assetId,
+  amount: "1000000",
+  burnDestination: {
+    chainId: "eip155:137",
+    address: "0x1111111111111111111111111111111111111111",
+    dstEid: 30109,
+  },
+  feeRate: 2,
+  minConfirmations: 6,
+};
+const namespace = args.burnDestination.chainId.split(":")[0];
 if (!(info.burnRecipientNamespaces ?? ["eip155"]).includes(namespace)) {
   throw new Error("Unsupported burn recipient namespace");
 }
-const burn = await provider.burnAsset(args); // RgbBurnAssetArgs
-await saveBurn(burn); // persist the result in your dApp
+const burn = await provider.burnAsset(args);
+await saveBurn(burn); // Persist the approved destination and transaction ID.
 const proof = await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid });
 ```
 
-With consent, share `proof.data` (Base64) with a third party to verify the
-burn proof. The receiving service handles confirmations, proof verification
-and any payout. Track the burn with
-`getTransferStatus(burn.transferId, burn.assetId)`. Proof retrieval can be
-retried using the saved txid. If a burn times out, check wallet history before
-requesting another burn.
+Use this example only with a wallet/transport integration known to implement
+this contract. The wallet validates the route using its own configuration,
+shows the destination for approval and derives the commitment in SPEC §4.1.
+The SDK/native boundary receives asset ID, exact amount, that 32-byte hash
+(`burn_reason` in rgb-lib), fee rate and confirmation count. In the RN binding,
+the amount and fee are decimal strings and the hash has no `0x` prefix.
 
-### Bridge V1 destination commitments
+With consent, share the proof and approved destination with the bridge. It must
+verify the commitment, asset, amount, transaction and payout parameters. A burn
+result is not a payout receipt. After a timeout, inspect wallet history and
+recover the existing proof rather than requesting another burn.
 
-The base `RgbBurnRecipient.address` is a native address, not a universal proof
-encoding. The legacy raw-account profile pads a 20-byte account with 12 zero
-bytes; for Tron it drops the validated native version byte. That legacy value
-does not bind a payout chain or endpoint.
+### Burn contract migration
 
-For a V1 bridge, require the application's `burnDestinationVersion: 1`
-extension and match the exact `chainId`/`dstEid` in `burnDestinationRoutes`.
-Construct the application-owned `burnDestination` preimage from the approved
-route and native address. EVM uses 20 account bytes; Tron uses the full 21-byte
-decoded payload including `0x41`, with its checksum excluded. V1 hashes these
-as dynamic recipient bytes and binds the destination chain and endpoint in a
-32-byte commitment; see [SPEC.md §4.1](./SPEC.md#41-bfa-destination-encoding-profiles)
-for the exact hashStruct. Do not pad or truncate the Tron payload to the legacy
-account encoding, infer an endpoint, or fall back when the wallet lacks V1.
+This is a breaking request/result change from `@utexo/webrgb@0.1.5`:
 
-Persist the exact approved preimage and burn result before later submission or
-proof sharing. Match that preimage in responses and portable exports, and use
-the saved proof for recovery rather than repeating the burn. Capability
-negotiation and commitment validation do not prove funded payout settlement.
+- Replace `burnRecipient` and any second destination object with the single
+  `{ chainId, address, dstEid }` destination, in both requests and results.
+- The request carries a native address. The wallet derives numeric chain ID and
+  address bytes internally; the bridge hash algorithm itself stays unchanged.
+- Do not require `burnDestinationVersion` or `burnDestinationRoutes` in getInfo.
+  The wallet must reject a missing/unsupported endpoint before confirmation.
+- Upgrade the wallet implementation, SDK facade, dApp and transport binding
+  together. Update package peers and existing transport profile negotiation
+  before use; merely replacing TypeScript declarations changes no wallet code.
+- The presence of `burnAsset` in `methods` alone cannot distinguish a 0.1.x
+  wallet. Use an explicitly supported provider build/transport contract. Never
+  probe compatibility by attempting a burn, send both formats, or retry using
+  the old format after a failure.
+- Keep recovery for already recorded burns separate: their original commitment
+  and saved preimage must not be rewritten using new defaults.
 
-These V1 fields and encoding are supplied by the wallet/bridge integration;
-this package's runtime and base type signatures do not implement or advertise
-them. Use the integration's explicit V1 types, encoder, route policy and
-independent commitment vectors.
+### Native mapping for the selected upstream APIs
 
-To sign a message, check support and request a signature:
+Compared upstream WebRGB `main` at `b4c9485` with rgb-lib BFA.8 (the RN pin
+`cafe66e`) and the latest published BFA/swaps release
+`v0.3.0-beta.8-upstream-dev-bfa-swaps.1` (`14c114c`). The methods below are
+optional: an older provider need not expose them, and an adapter must advertise
+only methods it actually implements.
+
+| WebRGB method | Native mapping and wallet responsibility |
+| --- | --- |
+| `createUtxos` | `create_utxos`, with `up_to = false`; validate backend bounds, obtain consent, return actual count and selected size/fee. |
+| `getBtcBalance` | `get_btc_balance`; obtain the empty, unreserved colorable count separately, or return null. Do not infer failure from zero: rgb-lib can allocate on occupied outputs. |
+| `refresh` | `refresh`; derive `refreshed` from `updated_status` and inspect every in-scope `failure`. A native call can succeed while individual transfers fail. |
+| `getAssetMetadata` | `get_asset_metadata`; map `initial_supply` to the exact decimal `issuedSupply`, not `known_circulating_supply` or a wallet balance. Map schema names and public media metadata, never local paths. |
+
+Unlike upstream's number-valued `issuedSupply`, this fork uses a string because
+native supply is u64. Convert directly from the native integer/string; converting
+an already rounded JavaScript number to a string cannot recover its precision.
+
+Two upstream methods are deliberately not adopted here. `cancelReceive` is a
+policy operation over transfer lookup and `fail_transfers`, not a direct native
+recipient-ID cancellation: even a waiting receive containing a verified BFA mint
+cannot be failed arbitrarily before its lock expires. `signPsbt` needs wallet-owned
+PSBT parsing, ownership and live RGB allocation checks before signing; a generic
+native signer does not provide that WebRGB contract. Both need dedicated adapter
+work and tests before they are advertised. `witnessReceive` and `signMessage`
+were already present in this fork.
+
+### Signing a message
+
+Check support before requesting a signature:
 
 ```ts
 if (supports(await provider.getInfo(), "signMessage") && provider.signMessage) {

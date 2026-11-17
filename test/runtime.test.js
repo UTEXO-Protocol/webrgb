@@ -239,6 +239,7 @@ describe("helpers", () => {
       "METHOD_NOT_SUPPORTED",
       "INVALID_PARAMS",
       "ASSET_NOT_FOUND",
+      "NO_AVAILABLE_UTXOS",
       "INTERNAL_ERROR",
     ]);
     assert.throws(() => RGB_ERROR_CODES.push("NEW"));

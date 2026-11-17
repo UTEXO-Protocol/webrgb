@@ -50,7 +50,7 @@ async function useBurn(
   if (!rgb.burnAsset || !rgb.getConsignment) return;
   const info = await rgb.getInfo();
   if (!supports(info, "burnAsset") || !supports(info, "getConsignment")) return;
-  const namespace = args.burnRecipient.chainId.split(":")[0];
+  const namespace = args.burnDestination.chainId.split(":")[0];
   if (!(info.burnRecipientNamespaces ?? ["eip155"]).includes(namespace)) return;
   const burn = await rgb.burnAsset(args);
   return rgb.getConsignment({ assetId: burn.assetId, txid: burn.txid });
@@ -58,3 +58,19 @@ async function useBurn(
 
 void main;
 void useBurn;
+
+async function useNewContract(rgb: RgbProvider): Promise<void> {
+  const args: RgbBurnAssetArgs = {
+    network: "signet", assetId: "rgb:bfa", amount: "1000000",
+    burnDestination: { chainId: "eip155:137", address: "0x" + "11".repeat(20), dstEid: 30109 },
+  };
+  if (rgb.burnAsset) (await rgb.burnAsset(args)).burnDestination.address.toUpperCase();
+  // @ts-expect-error a route needs its exact endpoint
+  const incomplete: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "eip155:137", address: "0x11" } };
+  if (rgb.getAssetMetadata) BigInt((await rgb.getAssetMetadata("rgb:bfa")).issuedSupply);
+  if (rgb.refresh) (await rgb.refresh()).refreshed;
+  if (rgb.createUtxos) (await rgb.createUtxos()).created;
+  if (rgb.getBtcBalance) (await rgb.getBtcBalance()).vanilla.spendable;
+  void incomplete;
+}
+void useNewContract;
