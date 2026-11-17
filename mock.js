@@ -10,6 +10,10 @@ const BASE_METHODS = [
   "getAddress",
   "blindReceive",
   "witnessReceive",
+  "createUtxos",
+  "getBtcBalance",
+  "refresh",
+  "getAssetMetadata",
   "issueAsset",
   "listAssets",
   "getAssetBalance",
@@ -45,19 +49,24 @@ export function createMockProvider(options = {}) {
   const autoEnable = options.autoEnable ?? true;
   const latencyMs = options.latencyMs ?? 0;
   const minConfirmationsFloor = options.minConfirmationsFloor ?? 1;
+  let freeUtxos = options.freeColorableUtxos ?? 5;
+  let vanillaSats = options.vanillaSats ?? 100_000;
+  let coloredSats = freeUtxos * 3000;
+  const createdAt = Math.floor(Date.now() / 1000);
   const methods = options.methods ?? [
     ...BASE_METHODS,
     ...(protocol === "RGB_LN" ? LN_METHODS : []),
     ...(options.signMessage ? ["signMessage"] : []),
     ...(options.getReceivedMint ? ["getReceivedMint"] : []),
+    ...(options.burnAsset ? ["burnAsset"] : []),
   ];
 
-  /** @type {Map<string, { asset: import("./index.js").RgbAsset, balance: number }>} */
+  /** @type {Map<string, { asset: import("./index.js").RgbAsset, balance: number, issuedSupply: unknown }>} */
   const assets = new Map();
   for (const [index, entry] of (options.assets ?? []).entries()) {
     const { balance = 0, ...asset } = entry;
     const id = asset.id ?? asset.asset_id ?? `rgb:mock-${index + 1}`;
-    assets.set(id, { asset: { ...asset, id }, balance });
+    assets.set(id, { asset: { ...asset, id }, balance, issuedSupply: asset.issuedSupply ?? balance });
   }
 
   /** @type {import("./index.js").RgbTransfer[]} */
@@ -106,7 +115,11 @@ export function createMockProvider(options = {}) {
   async function receive(method, args) {
     await call(method, [args]);
     if (args.assetId !== undefined) requireAsset(args.assetId);
+    if (method === "blindReceive" && freeUtxos < 1) {
+      throw fail("No free colorable UTXO", "NO_AVAILABLE_UTXOS");
+    }
     confirm();
+    if (method === "blindReceive") freeUtxos -= 1;
     const recipientId = `${method === "blindReceive" ? "utxob" : "wvout"}:mock${nextId()}`;
     return {
       invoice: `${args.assetId ?? "rgb:~"}/RGB20/${recipientId}`,
@@ -181,6 +194,95 @@ export function createMockProvider(options = {}) {
       return receive("witnessReceive", args);
     },
 
+    /** @param {import("./index.js").RgbCreateUtxosArgs} [args] */
+    async createUtxos(args = {}) {
+      await call("createUtxos", [args]);
+      const num = args.num ?? 3;
+      const size = args.size ?? 3000;
+      const feeRate = args.feeRate ?? 2;
+      if (!Number.isInteger(num) || num < 1 || num > 255 ||
+          !Number.isInteger(size) || size < 1 || size > 0xffffffff ||
+          !Number.isSafeInteger(feeRate) || feeRate < 1) {
+        throw fail("Invalid UTXO count, size or fee rate", "INVALID_PARAMS");
+      }
+      // A deterministic test fee, not a real Bitcoin transaction estimate.
+      const cost = num * size + feeRate * (110 + 43 * num);
+      if (!Number.isSafeInteger(cost) || cost > vanillaSats) {
+        throw fail("Not enough bitcoin to create UTXOs", "INTERNAL_ERROR");
+      }
+      confirm();
+      vanillaSats -= cost;
+      coloredSats += num * size;
+      freeUtxos += num;
+      return { created: num, size, feeRate };
+    },
+
+    async getBtcBalance() {
+      await call("getBtcBalance", []);
+      return {
+        vanilla: { settled: vanillaSats, future: vanillaSats, spendable: vanillaSats },
+        colored: { settled: coloredSats, future: coloredSats, spendable: coloredSats },
+        freeColorableUtxos: freeUtxos,
+      };
+    },
+
+    /** @param {string} [assetId] */
+    async refresh(assetId) {
+      await call("refresh", assetId === undefined ? [] : [assetId]);
+      if (assetId !== undefined) requireAsset(assetId);
+      // settle() advances this fixture; it has no native refresh or network.
+      return { refreshed: false };
+    },
+
+    /** @param {string} assetId */
+    async getAssetMetadata(assetId) {
+      await call("getAssetMetadata", [assetId]);
+      const { asset, issuedSupply: supply } = requireAsset(assetId);
+      if (typeof supply === "number" && !Number.isSafeInteger(supply)) {
+        throw fail("Initial supply fixture must preserve exact integers", "INTERNAL_ERROR");
+      }
+      const issuedSupply = String(supply);
+      if (!/^(0|[1-9]\d*)$/.test(issuedSupply) || BigInt(issuedSupply) > 18446744073709551615n) {
+        throw fail("Invalid initial supply in the metadata fixture", "INTERNAL_ERROR");
+      }
+      return {
+        assetId,
+        schema: typeof asset.schema === "string" ? asset.schema : "nia",
+        ticker: asset.ticker ?? null,
+        name: asset.name ?? "",
+        details: typeof asset.details === "string" ? asset.details : null,
+        precision: asset.precision ?? 0,
+        issuedSupply,
+        timestamp: typeof asset.timestamp === "number" ? asset.timestamp : createdAt,
+        media: null,
+      };
+    },
+
+    ...(options.burnAsset ? {
+      /** @param {import("./index.js").RgbBurnAssetArgs} args */
+      async burnAsset(args) {
+        const request = structuredClone(args);
+        await call("burnAsset", [request]);
+        if (!options.burnAsset) throw fail("No burn fixture configured", "METHOD_NOT_SUPPORTED");
+        const destination = request?.burnDestination;
+        if (!request || "burnRecipient" in request || request.network !== network ||
+            typeof request.amount !== "string" || !/^[1-9]\d*$/.test(request.amount) ||
+            BigInt(request.amount) > 18446744073709551615n || !destination || destination.version !== 1 ||
+            typeof destination.chainId !== "string" || !destination.chainId.includes(":") ||
+            typeof destination.address !== "string" || !destination.address ||
+            !Number.isInteger(destination.dstEid) || destination.dstEid < 0 || destination.dstEid > 0xffffffff ||
+            "destinationChainId" in destination || "recipient" in destination ||
+            (request.feeRate !== undefined && (!Number.isSafeInteger(request.feeRate) || request.feeRate < 1)) ||
+            (request.minConfirmations !== undefined && (!Number.isInteger(request.minConfirmations) || request.minConfirmations < 1 || request.minConfirmations > 255))) {
+          throw fail("burnAsset requires a single native-address destination and exact amount", "INVALID_PARAMS");
+        }
+        requireAsset(request.assetId);
+        confirm();
+        // The caller-supplied fixture owns route/address validation and the result.
+        return options.burnAsset(request);
+      },
+    } : {}),
+
     /** @param {import("./index.js").RgbIssueAssetArgs} args */
     async issueAsset(args) {
       await call("issueAsset", [args]);
@@ -198,6 +300,7 @@ export function createMockProvider(options = {}) {
       assets.set(assetId, {
         asset,
         balance: args.amounts.reduce((sum, amount) => sum + amount, 0),
+        issuedSupply: String(args.amounts.reduce((sum, amount) => sum + amount, 0)),
       });
       return { assetId, asset: /** @type {Record<string, unknown>} */ ({ ...asset }) };
     },
@@ -348,6 +451,9 @@ export function createMockProvider(options = {}) {
 
     reset() {
       transfers = [];
+      freeUtxos = options.freeColorableUtxos ?? 5;
+      vanillaSats = options.vanillaSats ?? 100_000;
+      coloredSats = freeUtxos * 3000;
       calls = [];
       listeners = new Map();
       enabled = false;

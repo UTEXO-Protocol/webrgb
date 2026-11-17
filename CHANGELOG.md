@@ -6,6 +6,26 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking
+
+- Prepare `1.0.0-next.0`: replace burn request/result `burnRecipient` with one
+  required `RgbBurnDestination` (`version: 1`, `chainId`, native `address`, `dstEid`). Remove
+  the old `RgbBurnRecipient` type. Preserve the bridge commitment algorithm.
+- Require the version in burn requests and results; reject missing or unsupported
+  request versions with `INVALID_PARAMS` before confirmation.
+- Make destination validation a wallet responsibility; remove the old V1
+  capability-field requirement and document coordinated transport/SDK migration.
+
+### Added
+
+- Selectively adopt `createUtxos`, `getBtcBalance`, `refresh`, `getAssetMetadata`
+  from upstream main as optional methods, with mock and conformance coverage.
+- Add `NO_AVAILABLE_UTXOS`. Keep initial asset supply exact as a decimal string
+  and require propagation of per-transfer refresh failures.
+- Document native method mappings and burn contract migration.
+
+## [0.1.5]
+
 ### Fixed
 
 - Allow a checked `getReceivedMint` receipt to omit `txid` before the EVM

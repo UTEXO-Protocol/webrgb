@@ -1,7 +1,7 @@
 # The WebRGB provider interface
 
-**Status:** draft, version 1. The interface is implemented by the KaleidoSwap
-browser extension ≥ 0.3.0 and described by `index.d.ts` in this repository.
+**Status:** draft, WebRGB 1.0.0-next.0 contract. The base interface follows the KaleidoSwap
+browser extension ≥ 0.3.0 and is described by `index.d.ts` in this repository.
 The `burnAsset`, `getConsignment` and `getReceivedMint` methods are optional
 BFA extensions provided by this fork.
 `signMessage` is also an optional extension provided by this fork.
@@ -75,10 +75,11 @@ Beyond the connection, consent is per call:
 
 | Method | Prompts | Notes |
 |--------|---------|-------|
-| `getInfo`, `getAddress`, `listAssets`, `getAssetBalance`, `listTransfers`, `getTransferStatus`, `decodeRgbInvoice` | MUST NOT | Read-only; a page may poll them |
+| `getInfo`, `getAddress`, `listAssets`, `getAssetBalance`, `listTransfers`, `getTransferStatus`, `decodeRgbInvoice`, `getBtcBalance`, `refresh`, `getAssetMetadata` | MUST NOT | Read-only; a page may poll them |
 | `blindReceive` | MUST | Creates an invoice that binds a UTXO |
 | `witnessReceive` | MUST | Creates an invoice for an output in the sender's transaction |
 | `signMessage` | MUST | Signs the displayed message for the requesting origin |
+| `createUtxos` | MUST | Spends bitcoin to create colorable UTXOs |
 | `issueAsset` | MUST | Mints; MAY also require a separate wallet capability |
 | `sendAsset` | MUST | Moves assets |
 | `burnAsset` | MUST | Burns assets |
@@ -121,9 +122,34 @@ around them.
   A wallet MAY enforce a higher floor, and SHOULD raise a lower request to its
   floor rather than reject. The confirmation MUST show the value actually used,
   and the result MUST carry it as `minConfirmations`.
+  If the native backend cannot allocate a receiving slot, reject with
+  `NO_AVAILABLE_UTXOS`; do not infer this solely from the empty-UTXO count.
 - **`witnessReceive(args?)`** returns an RGB invoice for an output created
   by the sender's transaction, without requiring an existing receiver UTXO.
   Its parameters, result and confirmation rules are the same as `blindReceive`.
+- **`createUtxos({ num?, size?, feeRate? })`** optionally creates colorable
+  UTXOs using the wallet's bitcoin. `num` is 1..255, `size` is a positive u32
+  in sats, and `feeRate` is a positive safe integer in sat/vB. Wallet defaults
+  apply when omitted. The wallet MUST validate backend limits and show the
+  actual outputs and fee before signing. Return the actual `created` count,
+  size and, when available, fee rate; fewer outputs may be created than requested. Invalid
+  parameters reject with `INVALID_PARAMS`; insufficient BTC uses
+  `INTERNAL_ERROR`. Never retry this spending operation automatically.
+- **`getBtcBalance()`** optionally returns aggregate `vanilla` and `colored`
+  balances (settled, future and spendable sats) as nonnegative safe integers,
+  plus `freeColorableUtxos` or `null` when its exact count is unavailable.
+  It MUST NOT expose outpoints. Zero empty UTXOs does not imply a receive
+  cannot use a free allocation slot on an occupied output.
+- **`refresh(assetId?)`** optionally syncs and advances transfers without a
+  confirmation prompt. Return `{ refreshed }`, true when a transfer changed
+  state. A successful backend unable to report changes may return false.
+  Wallets MUST inspect per-transfer native failures as well as thrown errors;
+  failures within the requested scope MUST reject using §6, not return false.
+- **`getAssetMetadata(assetId)`** optionally returns the typed contract metadata.
+  `issuedSupply` is the initial supply as a canonical unsigned u64 decimal
+  string, including zero. It is not the current wallet balance or circulating
+  supply. Schema names include `bfa`. `ticker`, `details`, and `media` are null
+  when unavailable. An unknown asset rejects with `ASSET_NOT_FOUND`.
 - **`issueAsset({ schema, ticker, name, amounts, precision? })`** mints.
   `schema` is `"nia"`, `"uda"` or `"cfa"`; a wallet that cannot serve a schema
   MUST reject with `METHOD_NOT_SUPPORTED` rather than substituting another.
@@ -133,17 +159,24 @@ around them.
   A wallet MAY refuse `{ invoice }` for an any-amount invoice, since nothing
   in the request fixes what leaves the wallet; it MUST then reject with
   `INVALID_PARAMS`, and the explicit form is how a page pays one.
-- **`burnAsset({ network, assetId, amount, burnRecipient, … })`** burns a BFA
-  (bridged fungible asset) and returns `txid` and `transferId` after broadcast.
-  `amount` is a positive u64 decimal string in base units; `network` MUST
-  match the connected RGB network. `burnRecipient` contains a CAIP-2 `chainId`
-  and native address, with validation defined in `RgbBurnRecipient`. Proof
-  encoding depends on the separately agreed destination profile (§4.1).
-  dApps MUST check `getInfo().burnRecipientNamespaces` (defaults to `["eip155"]`).
-  Wallets MUST reject unsupported chains or invalid addresses with `INVALID_PARAMS`
-  before confirmation. The wallet MUST validate the bridge route and show the asset,
-  amount, destination and Bitcoin fee in its confirmation. A dApp MUST NOT
-  automatically repeat a burn after a timeout.
+- **`burnAsset({ network, assetId, amount, burnDestination, … })`** burns a BFA
+  and returns its transaction ID after broadcast. `amount` is a canonical positive
+  u64 decimal string in base units; `network` MUST match the connected RGB network.
+  When provided, `feeRate` is a positive safe integer in sat/vB and
+  `minConfirmations` is an integer in 1..255; wallets may enforce higher floors.
+  `burnDestination` is the single required `{ version: 1, chainId, address, dstEid }` object
+  defined in `RgbBurnDestination`. `address` is native, not a precomputed hash.
+  The wallet MUST validate the exact chain/endpoint against its own configured
+  routes and validate the address, amount, fee and confirmation count before
+  confirmation. Unsupported routes, malformed values, a missing destination,
+  or legacy/mixed destination fields MUST reject with `INVALID_PARAMS`.
+  It MUST NOT ignore a supplied endpoint, derive a different endpoint silently,
+  or fall back to the old address-only commitment. Encoding is fixed in §4.1.
+  dApps MUST check `getInfo().burnRecipientNamespaces` (defaults to `["eip155"]`);
+  this identifies address formats, not supported payout routes. The wallet MUST
+  show the asset, amount, payout chain, native address and Bitcoin fee in its
+  confirmation. The result MUST carry the same approved `burnDestination`.
+  A dApp MUST NOT automatically repeat a burn after a timeout.
 - **`getConsignment({ assetId, txid })`** returns the saved burn consignment
   as Base64, with its byte length and digest as defined in `index.d.ts`.
   The consignment can be shared with a third party, such as a bridge, to
@@ -202,49 +235,53 @@ around them.
 - **`payLnInvoice(invoice)`** pays a BOLT-11 invoice that carries an asset. A
   plain Bitcoin invoice SHOULD be refused — that is `webln.sendPayment()`.
 
-### 4.1 BFA destination encoding profiles
+### 4.1 Burn destination commitment
 
-`RgbBurnRecipient` describes a native payout address. It does not by itself
-select the bytes committed by a burn. Namespace support and destination-profile
-support are separate capabilities.
+`RgbBurnDestination` contains only `version`, `chainId`, `address`, and `dstEid`.
+`version` MUST be the number `1` in requests and results. Missing or unsupported
+request versions MUST reject with `INVALID_PARAMS` before confirmation; wallets
+MUST NOT default or downgrade them. There is no duplicate `burnRecipient`, numeric
+`destinationChainId`, or encoded `recipient`. The wallet derives the internal preimage:
 
-The **legacy raw-account profile** encodes 12 zero bytes followed by the
-20-byte account into the proof. For Tron, validate the native Base58Check
-address first, then omit its `0x41` version byte and checksum in this legacy
-encoding only. The payout chain remains separately approved metadata; the raw
-account value does not commit to the destination chain or endpoint.
+- `destinationChainId`: the numeric reference of the validated CAIP-2 ID,
+  a positive u64. For this commitment profile, EVM uses `eip155` and Tron `tron`;
+  unsupported namespaces or noncanonical numeric references MUST reject.
+- `dstEid`: the supplied u32, matched against wallet-owned route configuration.
+  Zero means a configured direct payout, not an unknown endpoint. Never accept
+  an arbitrary destination merely because it has a syntactically valid ID.
+- `recipientBytes`: EVM uses the nonzero 20 native account bytes. Tron uses the
+  nonzero 21-byte Base58Check payload, including its `0x41` prefix but excluding
+  the checksum, after validating the full native address. No 32-byte padding
+  or truncation is applied before hashing these dynamic bytes.
 
-The **negotiated V1 destination extension** used by UTEXO bridge integrations
-commits to a different preimage. These integrations require
-`getInfo().burnDestinationVersion === 1` and an exact advertised
-`burnDestinationRoutes` chain/`dstEid` pair. Their request, result and portable
-proof export carry `burnDestination` with `version: 1`, `destinationChainId`,
-`dstEid` and hex-encoded `recipient` bytes. For the supported address formats:
-
-- EVM recipients contain exactly the 20 native account bytes.
-- Tron recipients contain exactly the 21 decoded native payload bytes, including
-  the leading `0x41` version byte and excluding the Base58Check checksum.
-
-Neither recipient is padded to 32 bytes before its dynamic-bytes hash. The
-32-byte V1 burn commitment is the hashStruct:
+The existing bridge commitment remains unchanged:
 
 ```text
 typeHash = keccak256(UTF8("UtexoBurnDestinationV1(uint64 destinationChainId,uint32 dstEid,bytes recipient)"))
 commitment = keccak256(abi.encode(typeHash, uint64(destinationChainId), uint32(dstEid), keccak256(recipientBytes)))
 ```
 
-This is not an EIP-712 domain/signature digest. The commitment binds the chain,
-endpoint and exact recipient bytes; it replaces the legacy raw-account value
-in the burn proof. Integrations MUST independently validate the native address,
-exact route and preimage before confirmation, and retain the same preimage
-through the durable result and proof export. They MUST NOT infer an endpoint
-from an address, treat namespace support as V1 support, or silently fall back
-to legacy encoding when V1 is required.
+`version: 1` selects the `V1` type string above; the version is not an additional
+ABI-encoded field. The result is a 32-byte commitment, not an EIP-712
+signature digest. Native rgb-lib receives it as a 64-character lowercase hex
+`burn_reason` without `0x`, together with asset, amount, fee and confirmations.
+It does not receive the WebRGB request object or validate bridge payout routes.
 
-V1 fields and hashing are application-owned extensions to this package's base
-interfaces. This package does not implement a V1 encoder, advertise a route
-registry, or qualify bridge payouts. Supporting the base BFA methods alone
-does not establish support for that extension or any payout network.
+For `eip155:137`, endpoint `30109`, and native address
+`0x1111111111111111111111111111111111111111`, the commitment is
+`0x7234950dd3dc71ccd10bc2b721230f7393ef7782176c1b296669cfda97850a6b`.
+
+The wallet MUST retain the approved destination with the burn result and proof
+export, so the receiving service can reconstruct and verify the commitment.
+It MUST NOT replace it with currently selected UI values during recovery.
+Neither this package nor a successful burn guarantees that a bridge pays out.
+
+This replaces the old `burnRecipient` request contract and is a breaking API
+change. The former `getInfo().burnDestinationVersion` and
+`burnDestinationRoutes` extensions are not required by this contract. The wallet
+owns route validation. See [INTEGRATION.md](./INTEGRATION.md#burn-contract-migration)
+for coordinated provider and transport migration; a method name alone cannot
+identify an older implementation's request semantics.
 
 ## 5. Events
 
@@ -270,13 +307,14 @@ Every rejection MUST be an `Error` carrying a `code`:
 | `METHOD_NOT_SUPPORTED` | This wallet cannot serve this method |
 | `INVALID_PARAMS` | An argument is malformed or out of range; `message` names it |
 | `ASSET_NOT_FOUND` | The call names an asset the wallet does not know |
+| `NO_AVAILABLE_UTXOS` | No allocatable RGB output/slot; offer UTXO creation or witness receiving |
 | `INTERNAL_ERROR` | Anything else; `message` carries the detail |
 
 A wallet SHOULD reject bad arguments with `INVALID_PARAMS` before raising any
 confirmation. A code a wallet's own backend produces MUST be mapped onto this
 table, never forwarded as-is. A dApp MUST treat a code it does not recognise
 as `INTERNAL_ERROR`: older wallets predate `INVALID_PARAMS` and
-`ASSET_NOT_FOUND`, and later versions may add codes.
+`ASSET_NOT_FOUND`, `NO_AVAILABLE_UTXOS`, and later versions may add codes.
 
 A dApp MUST NOT rely on `instanceof`: the error crosses a `postMessage`
 boundary and arrives as a plain `Error`. Use `isProviderError()`.

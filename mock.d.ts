@@ -7,6 +7,8 @@
 
 import type {
   RgbAsset,
+  RgbBurnAssetArgs,
+  RgbBurnAssetResult,
   RgbEvent,
   RgbMethod,
   RgbProtocol,
@@ -34,6 +36,12 @@ export interface MockProviderOptions {
   signMessage?: (message: string) => Promise<RgbSignMessageResult>;
   /** Test fixture only: the mock cannot validate native RGB consignments. */
   getReceivedMint?: (args: RgbGetReceivedMintArgs) => Promise<RgbReceivedMint | null>;
+  /** Fixture only: the mock does not construct a real burn or validate bridge routes. */
+  burnAsset?: (args: RgbBurnAssetArgs) => Promise<RgbBurnAssetResult>;
+  /** Initial mock-only empty colorable UTXOs. Default 5. */
+  freeColorableUtxos?: number;
+  /** Initial vanilla bitcoin in sats. Default 100000. */
+  vanillaSats?: number;
   /** Assets the wallet starts with. Balances default to 0. */
   assets?: Array<RgbAsset & { balance?: number }>;
   /** Delay every call by this many milliseconds, to shake out missing awaits. */

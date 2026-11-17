@@ -57,6 +57,10 @@ try {
 | `signMessage(message)` | Sign a message with user approval (optional) |
 | `blindReceive(args?)` | Blinded-UTXO receive invoice; omit `assetId` for any asset, including one the wallet has never held |
 | `witnessReceive(args?)` | Receive invoice for an output created by the sender's transaction |
+| `createUtxos(args?)` | Optional, consented creation of colorable UTXOs |
+| `getBtcBalance()` | Optional aggregate bitcoin balances; no outpoint disclosure |
+| `refresh(assetId?)` | Optional transfer refresh; backend failures reject |
+| `getAssetMetadata(assetId)` | Optional contract metadata with exact string-valued initial supply |
 | `issueAsset(args)` | Mint a new asset (gated by its own wallet capability) |
 | `listAssets()` / `getAssetBalance(id)` | Holdings |
 | `sendAsset(args)` | Send against an RGB invoice, or explicitly |
@@ -70,6 +74,16 @@ try {
 Feature-detect with `supports(info, method)` rather than assuming a method exists: a node-less wallet rejects the Lightning methods with `METHOD_NOT_SUPPORTED`.
 
 `listAssets()` and `listTransfers()` are typed wide because wallets differ on whether they wrap the array — pass them through `toAssetArray()` / `toTransferArray()`.
+
+### Burn migration
+
+This branch prepares a breaking `1.0.0-next.0` contract. `RgbBurnAssetArgs` and
+`RgbBurnAssetResult` carry one required `burnDestination`; `burnRecipient` and
+`RgbBurnRecipient` are removed. The destination requires `version: 1`, a native address and
+explicit route endpoint, which the wallet validates before confirmation. See
+[the migration guide](./INTEGRATION.md#burn-contract-migration) before updating
+wallet, SDK or WalletConnect integrations. Existing provider implementations do
+not gain support by installing newer types.
 
 ## Discovery
 
@@ -135,6 +149,7 @@ console.log(formatReport(await runConformance(window.rgb!)));
 | `METHOD_NOT_SUPPORTED` | The connected wallet cannot serve this method, or no provider was found |
 | `INVALID_PARAMS` | An argument is malformed or out of range; `error.message` names it |
 | `ASSET_NOT_FOUND` | The call names an asset the wallet does not know — for `blindReceive`, omit `assetId` |
+| `NO_AVAILABLE_UTXOS` | No available RGB allocation slot; create UTXOs or use a witness invoice |
 | `INTERNAL_ERROR` | Anything else; see `error.message` |
 
 The error crosses a `postMessage` boundary on its way out of the wallet, so what you catch is a plain `Error` carrying `code` — `instanceof` will not help. Use `isProviderError(err)`, or `providerErrorCode(err)` for a `switch` that must be total.

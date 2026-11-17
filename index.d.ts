@@ -19,6 +19,7 @@ export type ProviderErrorCode =
   | "METHOD_NOT_SUPPORTED"
   | "INVALID_PARAMS"
   | "ASSET_NOT_FOUND"
+  | "NO_AVAILABLE_UTXOS"
   | "INTERNAL_ERROR";
 
 /** Every code, in the order the README documents them. */
@@ -68,6 +69,10 @@ export type RgbMethod =
   | "signMessage"
   | "blindReceive"
   | "witnessReceive"
+  | "createUtxos"
+  | "getBtcBalance"
+  | "refresh"
+  | "getAssetMetadata"
   | "issueAsset"
   | "listAssets"
   | "getAssetBalance"
@@ -134,6 +139,55 @@ export interface RgbBlindReceiveResult {
 
 export type RgbWitnessReceiveArgs = RgbBlindReceiveArgs;
 export type RgbWitnessReceiveResult = RgbBlindReceiveResult;
+
+export interface RgbCreateUtxosArgs {
+  /** Number to create, 1..255; wallet default when omitted. */
+  num?: number;
+  /** Sats per output, a positive u32; wallet policy may enforce a higher minimum. */
+  size?: number;
+  /** Positive integer sat/vB; wallet estimate when omitted. */
+  feeRate?: number;
+}
+
+export interface RgbCreateUtxosResult {
+  /** Actual count created; may be lower than requested. */
+  created: number;
+  /** Sats per created output. */
+  size: number;
+  feeRate?: number;
+}
+
+/** Aggregate bitcoin amounts in sats, represented as nonnegative safe integers. */
+export interface RgbBtcBalanceSide {
+  settled: number;
+  future: number;
+  spendable: number;
+}
+
+export interface RgbBtcBalance {
+  vanilla: RgbBtcBalanceSide;
+  colored: RgbBtcBalanceSide;
+  /**
+   * Empty colorable UTXOs not reserved by pending operations, or null if unknown.
+   * Zero does not prove a receive will fail: rgb-lib may use an occupied UTXO
+   * with a free allocation slot. This response never exposes outpoints.
+   */
+  freeColorableUtxos: number | null;
+}
+
+export interface RgbAssetMetadata {
+  assetId: string;
+  schema: "nia" | "uda" | "cfa" | "ifa" | "bfa" | (string & {});
+  ticker: string | null;
+  name: string;
+  details: string | null;
+  precision: number;
+  /** Initial issued supply as a canonical u64 decimal string, not current balance. */
+  issuedSupply: string;
+  /** Unix timestamp in seconds, represented as a safe integer. */
+  timestamp: number;
+  media: { mime: string; digest: string } | null;
+}
 
 /** Exact wallet-created, asset-specific invoice, including its recipient, public key and expiry. */
 export interface RgbGetReceivedMintArgs {
@@ -239,32 +293,35 @@ export interface RgbSendAssetResult {
   [key: string]: unknown;
 }
 
-/** Payout destination for a BFA burn; wallets validate the chain and address together. */
-export interface RgbBurnRecipient {
+/** Single approved payout destination; the wallet derives and commits its encoded bytes. */
+export interface RgbBurnDestination {
+  /** Required commitment format; only V1 is supported. */
+  version: 1;
   /**
-   * CAIP-2 chain ID, e.g. "eip155:1" (Ethereum), "eip155:42161" (Arbitrum),
-   * "tron:728126428" (Tron), "tron:2494104990" (Shasta), "tron:3448148188" (Nile).
+   * CAIP-2 chain ID, e.g.
+   * "eip155:42161", "eip155:1", "eip155:137", "eip155:9745", "tron:728126428".
    */
   chainId: string;
-  /**
-   * Native address: eip155 uses nonzero 20-byte 0x hex; tron uses nonzero,
-   * case-sensitive Base58Check with version 0x41 and a valid checksum.
-   * These are native address validation rules, not a proof encoding. The legacy
-   * raw-account profile and negotiated V1 destination commitments encode them
-   * differently; see SPEC.md §4.1. A namespace alone never selects a profile.
-   */
+  /** Native address: nonzero 20-byte EVM hex or checksummed Tron Base58Check. */
   address: string;
+  /**
+   * LayerZero endpoint ID (u32), e.g. 30101 (Ethereum),
+   * 30109 (Polygon), 30383 (Plasma), 30420 (Tron).
+   * Zero means a configured direct payout; the wallet MUST validate the route.
+   */
+  dstEid: number;
 }
 
 export interface RgbBurnAssetArgs {
   /** Expected RGB network, checked against getInfo().network. */
   network: string;
   assetId: string;
-  /** Positive base-unit decimal integer, at most 18446744073709551615 (u64). */
+  /** Canonical positive base-unit decimal integer, at most 18446744073709551615 (u64). */
   amount: string;
-  burnRecipient: RgbBurnRecipient;
-  /** sat/vB; the wallet validates its backend's supported range. */
+  burnDestination: RgbBurnDestination;
+  /** Positive safe integer sat/vB; the wallet validates backend limits. */
   feeRate?: number;
+  /** Integer in 1..255; the wallet may raise it to its confirmation floor. */
   minConfirmations?: number;
 }
 
@@ -274,7 +331,7 @@ export interface RgbBurnAssetResult {
   txid: string;
   assetId: string;
   amount: string;
-  burnRecipient: RgbBurnRecipient;
+  burnDestination: RgbBurnDestination;
   status: RgbTransferStatus;
   /** Confirmations the wallet will wait for, as shown in the prompt. */
   minConfirmations: number;
@@ -388,11 +445,20 @@ export interface RgbProvider {
   signMessage?(message: string): Promise<RgbSignMessageResult>;
   blindReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
   witnessReceive(args?: RgbWitnessReceiveArgs): Promise<RgbWitnessReceiveResult>;
+  /** Optional; spends bitcoin to create colorable UTXOs, with user confirmation. */
+  createUtxos?(args?: RgbCreateUtxosArgs): Promise<RgbCreateUtxosResult>;
+  /** Optional aggregate read, without revealing UTXO identities. */
+  getBtcBalance?(): Promise<RgbBtcBalance>;
+  /** Optional; advances transfers without a prompt. Native refresh failures reject. */
+  refresh?(assetId?: string): Promise<{ refreshed: boolean }>;
+  /** Optional; contract metadata, with exact initial supply. */
+  getAssetMetadata?(assetId: string): Promise<RgbAssetMetadata>;
+
   issueAsset(args: RgbIssueAssetArgs): Promise<RgbIssueAssetResult>;
   listAssets(): Promise<RgbAssetList>;
   getAssetBalance(assetId: string): Promise<RgbAssetBalance>;
   sendAsset(args: RgbSendAssetArgs): Promise<RgbSendAssetResult>;
-  /** Optional BFA burn extension; requires a separate wallet confirmation. */
+  /** Optional BFA burn; requires the single-destination contract and separate confirmation. */
   burnAsset?(args: RgbBurnAssetArgs): Promise<RgbBurnAssetResult>;
   /** Share a saved burn consignment for third-party verification, with consent. */
   getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
