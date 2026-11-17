@@ -156,7 +156,7 @@ async function inspectPreparedMint(provider: RgbProvider, invoice: string): Prom
   // @ts-expect-error optional validation needs feature detection
   await provider.getReceivedMint({ invoice });
   const info = await provider.getInfo();
-  if (!supports(info, "getReceivedMint") || info.receivedMintVerificationVersion !== 1 || !provider.getReceivedMint) return;
+  if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) return;
   const received: RgbReceivedMint | null = await provider.getReceivedMint({ invoice });
   if (received === null) return;
   BigInt(received.amount);

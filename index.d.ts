@@ -97,8 +97,6 @@ export interface RgbInfo {
   methods: RgbMethod[];
   /** Supported payout namespaces, e.g. "eip155" or "tron"; omitted means ["eip155"]. */
   burnRecipientNamespaces?: string[];
-  /** Invoice-scoped received-mint contract version; also requires the method grant. */
-  receivedMintVerificationVersion?: 1;
 }
 
 /** `true` when `info.methods` lists `method`. */
@@ -142,7 +140,7 @@ export interface RgbGetReceivedMintArgs {
   invoice: string;
 }
 
-/** Wallet-validated pre-deposit mint commitment. All integers are decimal strings. */
+/** Wallet-validated pre-deposit mint commitment. Integers are canonical unsigned decimal strings. */
 export interface RgbReceivedMint {
   /** The unchanged invoice supplied to getReceivedMint. */
   invoice: string;
@@ -151,15 +149,17 @@ export interface RgbReceivedMint {
   assetId: string;
   /** Same network identifier as getInfo().network. */
   network: string;
-  /** Bitcoin transaction and RGB transition identifiers: lowercase 64-character hex. */
+  /** Bitcoin transaction ID: lowercase 64-character hex. */
   txid: string;
+  /** RGB transition ID, not a gateway operation ID: lowercase 64-character hex. */
   opid: string;
-  /** Lowercase 64-character hex EVM lock identifier; not a gateway operation ID. */
+  /** EVM lock identifier: lowercase 64-character hex. */
   lockId: string;
   /** Net RGB mint amount in the asset's base units, not the gross EVM deposit. */
   amount: string;
   /** Exclusive lock-chain block deadline for deposit inclusion. */
   beforeBlock: string;
+  /** EVM lock chain ID as a decimal string. */
   evmChainId: string;
   /** Lowercase 0x-prefixed 20-byte lock contract address. */
   bridgeContract: string;
@@ -394,10 +394,8 @@ export interface RgbProvider {
   getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
   /**
    * Optional pre-deposit inspection of an owned invoice's checked mint.
-   * Refresh may progress incoming receipts but never initiates or replays an
-   * outgoing payment. Stock RGB may retain earlier time-dependent checks;
-   * callers must check current lock-chain state before paying. Null means not
-   * ready; authorization, validation and transport errors must reject.
+   * Requires an enabled, authorized origin and raises no additional prompt.
+   * Null means pending; authorization, validation and transport errors reject.
    */
   getReceivedMint?(args: RgbGetReceivedMintArgs): Promise<RgbReceivedMint | null>;
   listTransfers(assetId?: string): Promise<RgbTransferList>;

@@ -9,7 +9,7 @@ import { formatReport, runConformance } from "@utexo/webrgb/conformance";
 async function main(): Promise<void> {
   const rgb: RgbProvider = await requestProvider({ enable: true, timeoutMs: 1000 });
   const info: RgbInfo = await rgb.getInfo();
-  if (info.receivedMintVerificationVersion === 1 && supports(info, "getReceivedMint") && rgb.getReceivedMint) {
+  if (supports(info, "getReceivedMint") && rgb.getReceivedMint) {
     const receipt = await rgb.getReceivedMint({ invoice: "rgb:owned" });
     if (receipt) BigInt(receipt.beforeBlock);
   }

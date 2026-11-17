@@ -643,13 +643,12 @@ describe("optional received mint fixture", () => {
     const provider = createMockProvider();
     await provider.enable();
     assert.equal((await provider.getInfo()).methods.includes("getReceivedMint"), false);
-    assert.equal((await provider.getInfo()).receivedMintVerificationVersion, undefined);
     await assert.rejects(provider.getReceivedMint({ invoice: "rgb:test" }), { code: "METHOD_NOT_SUPPORTED" });
   });
-  it("preserves pending and validation errors after checking authorization", async () => {
+  it("allows polling without per-call consent and preserves validation errors", async () => {
     const invoice = "rgb:exact?pk=abc&expiry=123";
     let calls = 0;
-    const provider = createMockProvider({ getReceivedMint: async (args) => {
+    const provider = createMockProvider({ rejectConfirmations: true, getReceivedMint: async (args) => {
       assert.equal(args.invoice, invoice);
       calls++;
       if (calls === 1) return null;
@@ -658,7 +657,6 @@ describe("optional received mint fixture", () => {
     await assert.rejects(provider.getReceivedMint({ invoice }), { code: "NOT_ENABLED" });
     await provider.enable();
     assert.equal((await provider.getInfo()).methods.includes("getReceivedMint"), true);
-    assert.equal((await provider.getInfo()).receivedMintVerificationVersion, 1);
     assert.equal(await provider.getReceivedMint({ invoice }), null);
     await assert.rejects(provider.getReceivedMint({ invoice }), { code: "INVALID_PARAMS" });
     assert.equal(calls, 2);
