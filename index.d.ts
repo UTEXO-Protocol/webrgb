@@ -296,14 +296,14 @@ export interface RgbSendAssetResult {
 /** Single approved payout destination; the wallet derives and commits its encoded bytes. */
 export interface RgbBurnDestination {
   /**
-   * Current UTEXO dev route IDs (CAIP-2):
+   * CAIP-2 chain ID, e.g.
    * "eip155:42161", "eip155:1", "eip155:137", "eip155:9745", "tron:728126428".
    */
   chainId: string;
   /** Native address: nonzero 20-byte EVM hex or checksummed Tron Base58Check. */
   address: string;
   /**
-   * Current UTEXO dev LayerZero EIDs (u32): 0 (Arbitrum direct), 30101 (Ethereum),
+   * LayerZero endpoint ID (u32), e.g. 30101 (Ethereum),
    * 30109 (Polygon), 30383 (Plasma), 30420 (Tron).
    * Zero means a configured direct payout; the wallet MUST validate the route.
    */
