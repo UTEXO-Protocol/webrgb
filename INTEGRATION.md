@@ -96,6 +96,50 @@ if (supports(await provider.getInfo(), "signMessage") && provider.signMessage) {
 
 The wallet asks for approval. Your backend can verify the returned signature.
 
+### Checking a prepared mint
+
+Request `getReceivedMint` when connecting if your transport negotiates method
+access. Enable the provider, create the invoice and pass it unchanged to the
+bridge to prepare the mint. Once preparation starts, check the wallet's result:
+
+```ts
+import { supports } from "@utexo/webrgb";
+
+const info = await provider.getInfo();
+if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) {
+  throw new Error("This wallet cannot check a prepared mint");
+}
+const receipt = await provider.getReceivedMint({ invoice });
+```
+
+A `null` result is pending. Poll the same invoice without requesting another
+confirmation. Handle rejected calls separately. Before paying:
+
+1. Compare the receipt's exact invoice, network, asset, net RGB amount, lock
+   ID, EVM chain ID, bridge contract and deadline against the prepared mint.
+   `opid` identifies an RGB transition. Use the bridge's own operation ID
+   separately for tracking.
+2. Independently verify the current EVM chain, lock contract and exclusive
+   block deadline for deposit inclusion. Use the bridge's deposit terms for
+   the gross EVM amount. The receipt's `amount` is the net RGB base-unit amount.
+3. Request the receipt again immediately before payment after any asynchronous
+   approval, and repeat the checks. Discard the receipt if the session, account,
+   network, invoice or mint preparation changes.
+
+For example, [rgb-lib-bfa BFA.8 can retain an earlier checked mint](https://github.com/UTEXO-Protocol/rgb-lib-bfa/blob/2f7b21d8637baad548504ea870deb2c0d4d0a37d/src/wallet/offline.rs#L3458-L3509)
+across a reject-list change so an existing lock can complete. A successful
+read does not establish settlement, fresh reject-list acceptance or EVM
+connectivity.
+
+#### Legacy browser providers
+
+Some builds of the UTEXO browser extension advertise a recipient-only
+`getReceivedMint(recipientId)`. For those builds, use the extension's
+`getReceivedMintForInvoice({ recipientId, invoice })` through a wallet-specific
+adapter that supplies the full invoice and its bound recipient. Never fall back
+to a recipient-only lookup for pre-deposit verification. The extension excludes
+the legacy method from its WalletConnect namespace.
+
 ## For wallet developers
 
 Implement the methods in [SPEC.md](./SPEC.md) in your wallet app. For example,
@@ -109,3 +153,7 @@ A mobile wallet attaches it to a transport adapter. Keep access scoped to the
 approved dApp. Connection approval does not approve a burn or the sharing of
 a consignment or message signing; each method follows the consent rules in
 the specification.
+
+For `getReceivedMint`, validate and bind the full invoice before using any
+native recipient-only lookup. Native proof validation is the wallet's
+responsibility. The WebRGB package and its mock do not validate RGB proofs.

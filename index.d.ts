@@ -74,6 +74,7 @@ export type RgbMethod =
   | "sendAsset"
   | "burnAsset"
   | "getConsignment"
+  | "getReceivedMint"
   | "listTransfers"
   | "getTransferStatus"
   | "decodeRgbInvoice"
@@ -133,6 +134,36 @@ export interface RgbBlindReceiveResult {
 
 export type RgbWitnessReceiveArgs = RgbBlindReceiveArgs;
 export type RgbWitnessReceiveResult = RgbBlindReceiveResult;
+
+/** Exact wallet-created invoice, including its recipient, public key and expiry. */
+export interface RgbGetReceivedMintArgs {
+  invoice: string;
+}
+
+/** Wallet-validated pre-deposit mint commitment. Integers are canonical unsigned decimal strings. */
+export interface RgbReceivedMint {
+  /** The unchanged invoice supplied to getReceivedMint. */
+  invoice: string;
+  recipientId: string;
+  /** Derived from the validated consignment, including for any-asset invoices. */
+  assetId: string;
+  /** Same network identifier as getInfo().network. */
+  network: string;
+  /** Bitcoin transaction ID: lowercase 64-character hex. */
+  txid: string;
+  /** RGB transition ID, not a gateway operation ID: lowercase 64-character hex. */
+  opid: string;
+  /** EVM lock identifier: lowercase 64-character hex. */
+  lockId: string;
+  /** Net RGB mint amount in the asset's base units, not the gross EVM deposit. */
+  amount: string;
+  /** Exclusive lock-chain block deadline for deposit inclusion. */
+  beforeBlock: string;
+  /** EVM lock chain ID as a decimal string. */
+  evmChainId: string;
+  /** Lowercase 0x-prefixed 20-byte lock contract address. */
+  bridgeContract: string;
+}
 
 export interface RgbIssueAssetArgs {
   /** Only `"nia"` is served today; `"uda"` and `"cfa"` reject with METHOD_NOT_SUPPORTED. */
@@ -361,6 +392,12 @@ export interface RgbProvider {
   burnAsset?(args: RgbBurnAssetArgs): Promise<RgbBurnAssetResult>;
   /** Share a saved burn consignment for third-party verification, with consent. */
   getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
+  /**
+   * Optional pre-deposit inspection of an owned invoice's checked mint.
+   * Requires an enabled, authorized origin and raises no additional prompt.
+   * Null means pending; authorization, validation and transport errors reject.
+   */
+  getReceivedMint?(args: RgbGetReceivedMintArgs): Promise<RgbReceivedMint | null>;
   listTransfers(assetId?: string): Promise<RgbTransferList>;
   getTransferStatus(
     transferId: string | number,

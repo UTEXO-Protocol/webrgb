@@ -18,6 +18,7 @@ import type {
   RgbAsset,
   RgbBurnAssetArgs,
   RgbGetConsignmentResult,
+  RgbReceivedMint,
   RgbInfo,
   RgbSignMessageResult,
   RgbProvider,
@@ -142,7 +143,7 @@ async function useSignMessage(provider: RgbProvider): Promise<void> {
 }
 
 function useLegacyProvider(
-  legacy: Omit<RgbProvider, "burnAsset" | "getConsignment" | "signMessage">,
+  legacy: Omit<RgbProvider, "burnAsset" | "getConsignment" | "signMessage" | "getReceivedMint">,
   args: RgbBurnAssetArgs,
 ): void {
   // Adding the extension must not require an existing wallet to implement it.
@@ -150,6 +151,23 @@ function useLegacyProvider(
   // @ts-expect-error optional methods need a presence check
   compatible.burnAsset(args);
 }
+
+async function inspectPreparedMint(provider: RgbProvider, invoice: string): Promise<void> {
+  // @ts-expect-error optional validation needs feature detection
+  await provider.getReceivedMint({ invoice });
+  const info = await provider.getInfo();
+  if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) return;
+  const received: RgbReceivedMint | null = await provider.getReceivedMint({ invoice });
+  if (received === null) return;
+  BigInt(received.amount);
+  BigInt(received.beforeBlock);
+  received.assetId.toUpperCase();
+  // @ts-expect-error recipient-only lookup does not bind the exact invoice
+  await provider.getReceivedMint({ recipientId: "utxob:seal" });
+  // @ts-expect-error a bare string is not the negotiated request object
+  await provider.getReceivedMint(invoice);
+}
+void inspectPreparedMint;
 
 async function useDiscovery(): Promise<void> {
   const rgb = await requestProvider({ timeoutMs: 5000 });

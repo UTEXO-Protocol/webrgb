@@ -2,8 +2,8 @@
 
 **Status:** draft, version 1. The interface is implemented by the KaleidoSwap
 browser extension ≥ 0.3.0 and described by `index.d.ts` in this repository.
-The `burnAsset` and `getConsignment` methods below are optional BFA extensions
-provided by this fork; they are not part of that reference implementation.
+The `burnAsset`, `getConsignment` and `getReceivedMint` methods are optional
+BFA extensions provided by this fork.
 `signMessage` is also an optional extension provided by this fork.
 `witnessReceive` is a standard provider method added by this fork.
 
@@ -83,6 +83,7 @@ Beyond the connection, consent is per call:
 | `sendAsset` | MUST | Moves assets |
 | `burnAsset` | MUST | Burns assets |
 | `getConsignment` | MUST unless already approved | Shares a consignment with a third party to verify a burn proof |
+| `getReceivedMint` | MUST NOT | After `enable()`, an authorized dApp may poll an owned invoice |
 | `makeLnInvoice`, `payLnInvoice` | MUST | Moves, or commits to receiving, assets over Lightning |
 
 A prompt the user dismisses MUST reject with `USER_REJECTED`.
@@ -100,8 +101,8 @@ around them.
   methods the wallet will serve. A method absent from it MUST reject with
   `METHOD_NOT_SUPPORTED`; a method present in it MUST NOT. `makeLnInvoice` and
   `payLnInvoice` MUST appear only when `protocol` is `"RGB_LN"`, and
-  `issueAsset` only when the runtime can mint. `burnAsset`, `getConsignment`
-  and `signMessage` are optional and MAY be absent when unsupported;
+  `issueAsset` only when the runtime can mint. `burnAsset`, `getConsignment`,
+  `getReceivedMint` and `signMessage` are optional and MAY be absent when unsupported;
   dApps MUST check both the method list and their presence.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
@@ -151,6 +152,30 @@ around them.
   party; consent already given for that proof and dApp MAY be reused until
   revoked. The result MUST contain the proof bytes, not a local file path,
   and retrieval MUST NOT perform another burn.
+- **`getReceivedMint({ invoice })`** inspects a prepared mint before the dApp
+  pays the EVM lock. The request MUST contain the complete, unchanged RGB
+  invoice. Wallets with only a recipient-ID lookup MUST NOT advertise it as
+  this method. The wallet MUST verify the requesting origin is authorized for the
+  method and invoice, that the invoice belongs to the active account, and
+  that its recipient, public key, expiry, assignment and transport data match
+  the wallet's record. A recipient ID alone is insufficient.
+  The wallet MUST refresh incoming state and bind the checked mint and its
+  consignment to that exact invoice. The result is
+  [`RgbReceivedMint`](./index.d.ts), with the original invoice, the wallet's
+  network as returned by `getInfo()`, and the asset from the validated proof.
+  An asset-specific invoice MUST match the proof's asset.
+  The method MUST return `null` only while a valid, authorized invoice has
+  no checked mint ready. It MUST reject expired or foreign invoices,
+  rejected proofs, mismatches, unavailable wallets and transport failures.
+  Refresh MAY acknowledge an incoming transfer and deliver its already
+  signed transaction. It MUST NOT create an invoice, initiate or replay an
+  outgoing send or burn, or approve or pay an EVM deposit.
+  A wallet MAY use previously checked mint terms during refresh. A receipt
+  does not establish current EVM connectivity, current reject-list acceptance
+  or settlement. Before paying, the dApp MUST match the receipt to its
+  intended operation and verify current lock-chain state. A change of
+  session, account, network, invoice or mint preparation invalidates the
+  prior result. See [the integration guide](./INTEGRATION.md#checking-a-prepared-mint).
 - **`listAssets()`** and **`listTransfers(assetId?)`** MUST return arrays.
   (Wallets that wrap them exist; `toAssetArray` / `toTransferArray` in this
   package tolerate that, and the conformance suite reports it.)
