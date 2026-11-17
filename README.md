@@ -77,7 +77,7 @@ Feature-detect with `supports(info, method)` rather than assuming a method exist
 
 ### Burn migration
 
-This branch prepares a breaking `1.0.0-next.0` contract. `RgbBurnAssetArgs` and
+Version `0.1.6` introduces a breaking burn contract change. `RgbBurnAssetArgs` and
 `RgbBurnAssetResult` carry one required `burnDestination`; `burnRecipient` and
 `RgbBurnRecipient` are removed. The destination requires `version: 1`, a native address and
 explicit route endpoint, which the wallet validates before confirmation. See

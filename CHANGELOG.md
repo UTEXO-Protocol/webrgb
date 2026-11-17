@@ -4,11 +4,11 @@ All notable changes to `@utexo/webrgb` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.6]
 
 ### Breaking
 
-- Prepare `1.0.0-next.0`: replace burn request/result `burnRecipient` with one
+- Replace burn request/result `burnRecipient` with one
   required `RgbBurnDestination` (`version: 1`, `chainId`, native `address`, `dstEid`). Remove
   the old `RgbBurnRecipient` type. Preserve the bridge commitment algorithm.
 - Require the version in burn requests and results; reject missing or unsupported

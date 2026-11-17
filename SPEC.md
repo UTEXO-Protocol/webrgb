@@ -1,6 +1,6 @@
 # The WebRGB provider interface
 
-**Status:** draft, WebRGB 1.0.0-next.0 contract. The base interface follows the KaleidoSwap
+**Status:** draft, WebRGB 0.1.6 contract. The base interface follows the KaleidoSwap
 browser extension ≥ 0.3.0 and is described by `index.d.ts` in this repository.
 The `burnAsset`, `getConsignment` and `getReceivedMint` methods are optional
 BFA extensions provided by this fork.
