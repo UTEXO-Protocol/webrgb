@@ -20,8 +20,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   from upstream main as optional methods, with mock and conformance coverage.
 - Add `NO_AVAILABLE_UTXOS`. Keep initial asset supply exact as a decimal string
   and require propagation of per-transfer refresh failures.
-- Document the native mappings and why cancellation and generic PSBT signing
-  remain deferred.
+- Document native method mappings and burn contract migration.
 
 ## [0.1.5]
 

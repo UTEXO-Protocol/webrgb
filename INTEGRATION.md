@@ -1,9 +1,7 @@
 # Integrating dApps and wallets
 
-WebRGB defines the calls between a dApp and a wallet. The dApp uses a
-`RgbProvider`; the wallet implements its methods and handles user consent.
-Browser extensions and mobile wallets use the same method signatures.
-The BFA methods and message signing below are additions in this UTEXO fork.
+dApps call a `RgbProvider`; wallets implement its methods and user consent.
+Browser extensions and mobile wallets use the same interface.
 
 ## For dApp developers
 
@@ -15,10 +13,8 @@ import { requestProvider } from "@utexo/webrgb";
 const provider = await requestProvider({ enable: true });
 ```
 
-For a mobile wallet, use a transport adapter to obtain the same provider
-interface. The dApp displays a connection QR or opens a deep link, and the
-user approves in their wallet. `@utexo/webrgb-walletconnect` is a separate
-project with its own setup and transport documentation.
+For mobile wallets, obtain the provider through a transport adapter such as
+`@utexo/webrgb-walletconnect`; follow its connection and authorization setup.
 
 For mint, request an invoice and pass it to the bridge or faucet:
 
@@ -61,65 +57,24 @@ await saveBurn(burn); // Persist the approved destination and transaction ID.
 const proof = await provider.getConsignment({ assetId: burn.assetId, txid: burn.txid });
 ```
 
-Use this example only with a wallet/transport integration known to implement
-this contract. The wallet validates the route using its own configuration,
-shows the destination for approval and derives the commitment in SPEC §4.1.
-The SDK/native boundary receives asset ID, exact amount, that 32-byte hash
-(`burn_reason` in rgb-lib), fee rate and confirmation count. In the RN binding,
-the amount and fee are decimal strings and the hash has no `0x` prefix.
-
-With consent, share the proof and approved destination with the bridge. It must
-verify the commitment, asset, amount, transaction and payout parameters. A burn
-result is not a payout receipt. After a timeout, inspect wallet history and
-recover the existing proof rather than requesting another burn.
+Use a wallet and transport that implement this burn contract. The wallet
+validates the destination before approval and computes the commitment in
+[SPEC §4.1](./SPEC.md#41-burn-destination-commitment). The bridge verifies the
+proof against the approved asset, amount, transaction and destination before payout.
+After a timeout, recover the saved burn from wallet history; do not burn again.
 
 ### Burn contract migration
 
-This is a breaking request/result change from `@utexo/webrgb@0.1.5`:
-
-- Replace `burnRecipient` and any second destination object with the single
-  `{ chainId, address, dstEid }` destination, in both requests and results.
-- The request carries a native address. The wallet derives numeric chain ID and
-  address bytes internally; the bridge hash algorithm itself stays unchanged.
-- Do not require `burnDestinationVersion` or `burnDestinationRoutes` in getInfo.
-  The wallet must reject a missing/unsupported endpoint before confirmation.
-- Upgrade the wallet implementation, SDK facade, dApp and transport binding
-  together. Update package peers and existing transport profile negotiation
-  before use; merely replacing TypeScript declarations changes no wallet code.
-- The presence of `burnAsset` in `methods` alone cannot distinguish a 0.1.x
-  wallet. Use an explicitly supported provider build/transport contract. Never
-  probe compatibility by attempting a burn, send both formats, or retry using
-  the old format after a failure.
-- Keep recovery for already recorded burns separate: their original commitment
-  and saved preimage must not be rewritten using new defaults.
-
-### Native mapping for the selected upstream APIs
-
-Compared upstream WebRGB `main` at `b4c9485` with rgb-lib BFA.8 (the RN pin
-`cafe66e`) and the latest published BFA/swaps release
-`v0.3.0-beta.8-upstream-dev-bfa-swaps.1` (`14c114c`). The methods below are
-optional: an older provider need not expose them, and an adapter must advertise
-only methods it actually implements.
-
-| WebRGB method | Native mapping and wallet responsibility |
-| --- | --- |
-| `createUtxos` | `create_utxos`, with `up_to = false`; validate backend bounds, obtain consent, return actual count and selected size/fee. |
-| `getBtcBalance` | `get_btc_balance`; obtain the empty, unreserved colorable count separately, or return null. Do not infer failure from zero: rgb-lib can allocate on occupied outputs. |
-| `refresh` | `refresh`; derive `refreshed` from `updated_status` and inspect every in-scope `failure`. A native call can succeed while individual transfers fail. |
-| `getAssetMetadata` | `get_asset_metadata`; map `initial_supply` to the exact decimal `issuedSupply`, not `known_circulating_supply` or a wallet balance. Map schema names and public media metadata, never local paths. |
-
-Unlike upstream's number-valued `issuedSupply`, this fork uses a string because
-native supply is u64. Convert directly from the native integer/string; converting
-an already rounded JavaScript number to a string cannot recover its precision.
-
-Two upstream methods are deliberately not adopted here. `cancelReceive` is a
-policy operation over transfer lookup and `fail_transfers`, not a direct native
-recipient-ID cancellation: even a waiting receive containing a verified BFA mint
-cannot be failed arbitrarily before its lock expires. `signPsbt` needs wallet-owned
-PSBT parsing, ownership and live RGB allocation checks before signing; a generic
-native signer does not provide that WebRGB contract. Both need dedicated adapter
-work and tests before they are advertised. `witnessReceive` and `signMessage`
-were already present in this fork.
+- Replace `burnRecipient` and any separate destination object with one
+  `burnDestination: { chainId, address, dstEid }` in requests and results.
+  Use the native address; the commitment algorithm is unchanged.
+- Do not require `burnDestinationVersion` or `burnDestinationRoutes` in
+  `getInfo()`. The wallet validates route support before confirmation.
+- Update the wallet, SDK, dApp and transport together, including dependency
+  constraints and transport negotiation. The `burnAsset` method name alone
+  does not identify this contract. Never probe compatibility by burning,
+  send both formats or retry with the legacy format.
+- Preserve the original commitment and destination when recovering older burns.
 
 ### Signing a message
 
@@ -152,12 +107,9 @@ await prepareMint(invoice); // application-specific bridge preparation
 const receipt = await provider.getReceivedMint({ invoice });
 ```
 
-A receipt can omit `txid` until the wallet links the receive to its witness
-transaction, which may happen only after the lock is paid. Do not wait for
-`txid` before payment: match `lockId`, which already commits to that transaction.
-
-A `null` result is pending. Poll the same invoice without requesting another
-confirmation. Handle rejected calls separately. Before paying:
+`null` means pending; poll the same invoice without additional consent and
+handle errors separately. `txid` may be absent before payment; match `lockId`
+instead, which already commits to the witness transaction. Before paying:
 
 1. Compare the receipt's exact invoice, network, asset, net RGB amount, lock
    ID, EVM chain ID, bridge contract and deadline against the prepared mint.
@@ -170,37 +122,32 @@ confirmation. Handle rejected calls separately. Before paying:
    approval, and repeat the checks. Discard the receipt if the session, account,
    network, invoice or mint preparation changes.
 
-For example, [rgb-lib-bfa BFA.8 can retain an earlier checked mint](https://github.com/UTEXO-Protocol/rgb-lib-bfa/blob/2f7b21d8637baad548504ea870deb2c0d4d0a37d/src/wallet/offline.rs#L3458-L3509)
-across a reject-list change so an existing lock can complete. A successful
-read does not establish settlement, fresh reject-list acceptance or EVM
-connectivity.
-
-#### Legacy browser providers
-
-Some builds of the UTEXO browser extension advertise a recipient-only
-`getReceivedMint(recipientId)`. For those builds, use the extension's
-`getReceivedMintForInvoice({ recipientId, invoice })` through a wallet-specific
-adapter that supplies the full invoice and its bound recipient. Never fall back
-to a recipient-only lookup for pre-deposit verification. The extension excludes
-the legacy method from its WalletConnect namespace.
+A receipt does not prove settlement, current reject-list acceptance or EVM
+connectivity. Adapters must preserve invoice binding; never fall back to a
+recipient-only lookup for pre-payment verification.
 
 ## For wallet developers
 
-Implement the methods in [SPEC.md](./SPEC.md) in your wallet app. For example,
-`blindReceive` validates the request, asks the user to confirm, creates an
-invoice through your wallet backend and returns `RgbBlindReceiveResult`.
-Your backend can be native, WASM or a node API; dApps do not call it directly.
-Map its arguments, results and errors to WebRGB.
+Map backend arguments, results and errors to [SPEC.md](./SPEC.md). Advertise
+only implemented methods. Extensions join provider discovery; mobile wallets
+use a transport adapter. Scope access to the approved dApp and apply the
+per-method consent rules in SPEC §3.
 
-An extension injects this provider and joins discovery (§1–2 in the spec).
-A mobile wallet attaches it to a transport adapter. Keep access scoped to the
-approved dApp. Connection approval does not approve a burn or the sharing of
-a consignment or message signing; each method follows the consent rules in
-the specification.
+For burn, validate the destination and compute its commitment before signing.
+Pass the asset ID, exact amount, commitment as `burn_reason` (64 lowercase hex
+characters without `0x`), fee rate and confirmation count to rgb-lib.
 
-For `getReceivedMint`, validate and bind the full, asset-specific invoice before
-using any native recipient-only lookup. Reject any-asset invoices with
-`INVALID_PARAMS`. The validated consignment must match the invoice's asset;
-do not wait for an asset association or transaction ID in transfer history
-before returning the checked mint. Native proof validation is the wallet's
-responsibility. The WebRGB package and its mock do not validate RGB proofs.
+For `getReceivedMint`, bind the full invoice to the active wallet before a
+native recipient-only lookup. Reject any-asset invoices with `INVALID_PARAMS`
+and verify the consignment matches the invoice's asset. Do not wait for
+`assetId` or `txid` in transfer history before returning a checked mint.
+Proof validation belongs to the wallet, not this package or its mock.
+
+### Optional native methods
+
+| WebRGB method | rgb-lib mapping |
+| --- | --- |
+| `createUtxos` | `create_utxos` with `up_to = false`; obtain consent and return the actual count, size and optional fee rate. |
+| `getBtcBalance` | `get_btc_balance`; count empty, unreserved colorable UTXOs separately or return null. Zero does not exclude free allocation slots on occupied outputs. Never expose outpoints. |
+| `refresh` | `refresh`; derive `refreshed` from `updated_status` and reject on any in-scope per-transfer `failure`, even if the native call succeeds. |
+| `getAssetMetadata` | `get_asset_metadata`; map `initial_supply` directly to the exact decimal `issuedSupply`, without conversion through a JavaScript number. Return public media metadata, never local paths. |
