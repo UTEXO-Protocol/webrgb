@@ -41,6 +41,7 @@ const args: RgbBurnAssetArgs = {
   assetId,
   amount: "1000000",
   burnDestination: {
+    version: 1,
     chainId: "eip155:137",
     address: "0x1111111111111111111111111111111111111111",
     dstEid: 30109,
@@ -66,7 +67,8 @@ After a timeout, recover the saved burn from wallet history; do not burn again.
 ### Burn contract migration
 
 - Replace `burnRecipient` and any separate destination object with one
-  `burnDestination: { chainId, address, dstEid }` in requests and results.
+  `burnDestination: { version: 1, chainId, address, dstEid }` in requests and results.
+  The version is required; missing or unsupported versions reject before confirmation.
   Use the native address; the commitment algorithm is unchanged.
 - Do not require `burnDestinationVersion` or `burnDestinationRoutes` in
   `getInfo()`. The wallet validates route support before confirmation.

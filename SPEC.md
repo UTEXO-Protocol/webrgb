@@ -164,7 +164,7 @@ around them.
   u64 decimal string in base units; `network` MUST match the connected RGB network.
   When provided, `feeRate` is a positive safe integer in sat/vB and
   `minConfirmations` is an integer in 1..255; wallets may enforce higher floors.
-  `burnDestination` is the single required `{ chainId, address, dstEid }` object
+  `burnDestination` is the single required `{ version: 1, chainId, address, dstEid }` object
   defined in `RgbBurnDestination`. `address` is native, not a precomputed hash.
   The wallet MUST validate the exact chain/endpoint against its own configured
   routes and validate the address, amount, fee and confirmation count before
@@ -237,9 +237,11 @@ around them.
 
 ### 4.1 Burn destination commitment
 
-`RgbBurnDestination` contains only `chainId`, `address`, and `dstEid`. There is
-no duplicate `burnRecipient`, numeric `destinationChainId`, encoded `recipient`,
-or request `version`. The wallet derives the following internal preimage:
+`RgbBurnDestination` contains only `version`, `chainId`, `address`, and `dstEid`.
+`version` MUST be the number `1` in requests and results. Missing or unsupported
+request versions MUST reject with `INVALID_PARAMS` before confirmation; wallets
+MUST NOT default or downgrade them. There is no duplicate `burnRecipient`, numeric
+`destinationChainId`, or encoded `recipient`. The wallet derives the internal preimage:
 
 - `destinationChainId`: the numeric reference of the validated CAIP-2 ID,
   a positive u64. For this commitment profile, EVM uses `eip155` and Tron `tron`;
@@ -259,8 +261,8 @@ typeHash = keccak256(UTF8("UtexoBurnDestinationV1(uint64 destinationChainId,uint
 commitment = keccak256(abi.encode(typeHash, uint64(destinationChainId), uint32(dstEid), keccak256(recipientBytes)))
 ```
 
-The `V1` in that fixed type string identifies the hash format; it is not an
-additional request field. The result is a 32-byte commitment, not an EIP-712
+`version: 1` selects the `V1` type string above; the version is not an additional
+ABI-encoded field. The result is a 32-byte commitment, not an EIP-712
 signature digest. Native rgb-lib receives it as a 64-character lowercase hex
 `burn_reason` without `0x`, together with asset, amount, fee and confirmations.
 It does not receive the WebRGB request object or validate bridge payout routes.

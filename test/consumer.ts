@@ -94,39 +94,47 @@ async function useBurn(provider: RgbProvider): Promise<void> {
     network: info.network,
     assetId: "rgb:bfa",
     amount: "18446744073709551615",
-    burnDestination: { chainId: "eip155:31337", dstEid: 0, address: `0x${"11".repeat(20)}` },
+    burnDestination: { version: 1, chainId: "eip155:31337", dstEid: 0, address: `0x${"11".repeat(20)}` },
     feeRate: 2,
     minConfirmations: 3,
   };
   const tron: RgbBurnAssetArgs = { ...args, burnDestination: {
-    chainId: "tron:728126428", dstEid: 30420, address: "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL",
+    version: 1, chainId: "tron:728126428", dstEid: 30420, address: "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL",
   } };
   // Unknown namespaces remain representable; wallets must reject unsupported routes.
   const extended: RgbBurnAssetArgs = { ...args, burnDestination: {
-    chainId: "cosmos:cosmoshub-4", dstEid: 100, address: "cosmos1t2uflqwqe0fsj0shcfkrvpukewcw40yjj6hdc0",
+    version: 1, chainId: "cosmos:cosmoshub-4", dstEid: 100, address: "cosmos1t2uflqwqe0fsj0shcfkrvpukewcw40yjj6hdc0",
   } };
   const extendedInfo: RgbInfo = { ...info, burnRecipientNamespaces: ["eip155", "tron", "cosmos"] };
   // @ts-expect-error addresses must be strings; format validation belongs to the wallet
-  const wrongAddress: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "tron:728126428", dstEid: 30420, address: 123 } };
+  const wrongAddress: RgbBurnAssetArgs = { ...args, burnDestination: { version: 1, chainId: "tron:728126428", dstEid: 30420, address: 123 } };
   void [tron, extended, extendedInfo, wrongAddress];
   // @ts-expect-error burn amounts must preserve all u64 digits as a string
   const imprecise: RgbBurnAssetArgs = { ...args, amount: 9007199254740993 };
   // @ts-expect-error a recipient must name its payout chain as well as its address
-  const noChain: RgbBurnAssetArgs = { ...args, burnDestination: { address: "0x11" } };
+  const noChain: RgbBurnAssetArgs = { ...args, burnDestination: { version: 1, address: "0x11" } };
   void [imprecise, noChain];
   // @ts-expect-error the endpoint must be explicit, including zero for direct payout
-  const noEndpoint: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "eip155:137", address: "0x11" } };
+  const noEndpoint: RgbBurnAssetArgs = { ...args, burnDestination: { version: 1, chainId: "eip155:137", address: "0x11" } };
   // @ts-expect-error the old recipient-only request is not this contract
   const legacy: RgbBurnAssetArgs = { network: info.network, assetId: "rgb:bfa", amount: "1", burnRecipient: { chainId: "eip155:1", address: "0x11" } };
   // @ts-expect-error callers send native addresses, not a second encoded preimage
   const duplicated: RgbBurnAssetArgs = { ...args, burnDestination: { ...args.burnDestination, destinationChainId: 137 } };
-  void [noEndpoint, legacy, duplicated];
+  // @ts-expect-error a burn destination must explicitly select its commitment version
+  const noVersion: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "eip155:137", address: "0x11", dstEid: 30109 } };
+  // @ts-expect-error only the numeric literal 1 is supported
+  const wrongVersion: RgbBurnAssetArgs = { ...args, burnDestination: { ...args.burnDestination, version: 2 } };
+  // @ts-expect-error a string is not the commitment version
+  const stringVersion: RgbBurnAssetArgs = { ...args, burnDestination: { ...args.burnDestination, version: "1" } };
+  void [noEndpoint, legacy, duplicated, noVersion, wrongVersion, stringVersion];
 
 
   const namespace = args.burnDestination.chainId.split(":")[0];
   if (!(info.burnRecipientNamespaces ?? ["eip155"]).includes(namespace)) return;
   const burn = await provider.burnAsset(args);
   const exactAmount: string = burn.amount;
+  const version: 1 = burn.burnDestination.version;
+  void version;
   burn.burnDestination.dstEid.toFixed();
   burn.minConfirmations.toFixed();
   const proof: RgbGetConsignmentResult = await provider.getConsignment({

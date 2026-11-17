@@ -9,8 +9,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Breaking
 
 - Prepare `1.0.0-next.0`: replace burn request/result `burnRecipient` with one
-  required `RgbBurnDestination` (`chainId`, native `address`, `dstEid`). Remove
+  required `RgbBurnDestination` (`version: 1`, `chainId`, native `address`, `dstEid`). Remove
   the old `RgbBurnRecipient` type. Preserve the bridge commitment algorithm.
+- Require the version in burn requests and results; reject missing or unsupported
+  request versions with `INVALID_PARAMS` before confirmation.
 - Make destination validation a wallet responsibility; remove the old V1
   capability-field requirement and document coordinated transport/SDK migration.
 

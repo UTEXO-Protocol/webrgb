@@ -62,15 +62,19 @@ void useBurn;
 async function useNewContract(rgb: RgbProvider): Promise<void> {
   const args: RgbBurnAssetArgs = {
     network: "signet", assetId: "rgb:bfa", amount: "1000000",
-    burnDestination: { chainId: "eip155:137", address: "0x" + "11".repeat(20), dstEid: 30109 },
+    burnDestination: { version: 1, chainId: "eip155:137", address: "0x" + "11".repeat(20), dstEid: 30109 },
   };
   if (rgb.burnAsset) (await rgb.burnAsset(args)).burnDestination.address.toUpperCase();
   // @ts-expect-error a route needs its exact endpoint
-  const incomplete: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "eip155:137", address: "0x11" } };
+  const incomplete: RgbBurnAssetArgs = { ...args, burnDestination: { version: 1, chainId: "eip155:137", address: "0x11" } };
   if (rgb.getAssetMetadata) BigInt((await rgb.getAssetMetadata("rgb:bfa")).issuedSupply);
   if (rgb.refresh) (await rgb.refresh()).refreshed;
   if (rgb.createUtxos) (await rgb.createUtxos()).created;
   if (rgb.getBtcBalance) (await rgb.getBtcBalance()).vanilla.spendable;
-  void incomplete;
+  // @ts-expect-error version is required under NodeNext too
+  const noVersion: RgbBurnAssetArgs = { ...args, burnDestination: { chainId: "eip155:137", address: "0x11", dstEid: 30109 } };
+  // @ts-expect-error unsupported versions cannot be requested
+  const unsupported: RgbBurnAssetArgs = { ...args, burnDestination: { ...args.burnDestination, version: 2 } };
+  void [incomplete, noVersion, unsupported];
 }
 void useNewContract;

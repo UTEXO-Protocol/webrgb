@@ -79,7 +79,7 @@ Feature-detect with `supports(info, method)` rather than assuming a method exist
 
 This branch prepares a breaking `1.0.0-next.0` contract. `RgbBurnAssetArgs` and
 `RgbBurnAssetResult` carry one required `burnDestination`; `burnRecipient` and
-`RgbBurnRecipient` are removed. The destination contains a native address and
+`RgbBurnRecipient` are removed. The destination requires `version: 1`, a native address and
 explicit route endpoint, which the wallet validates before confirmation. See
 [the migration guide](./INTEGRATION.md#burn-contract-migration) before updating
 wallet, SDK or WalletConnect integrations. Existing provider implementations do

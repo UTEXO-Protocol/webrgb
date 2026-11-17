@@ -295,6 +295,8 @@ export interface RgbSendAssetResult {
 
 /** Single approved payout destination; the wallet derives and commits its encoded bytes. */
 export interface RgbBurnDestination {
+  /** Required commitment format; only V1 is supported. */
+  version: 1;
   /**
    * CAIP-2 chain ID, e.g.
    * "eip155:42161", "eip155:1", "eip155:137", "eip155:9745", "tron:728126428".

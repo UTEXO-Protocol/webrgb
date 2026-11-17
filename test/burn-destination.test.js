@@ -4,6 +4,7 @@ import { createMockProvider } from "../mock.js";
 import { runConformance } from "../conformance.js";
 
 const destination = {
+  version: 1,
   chainId: "eip155:137",
   address: "0x" + "11".repeat(20),
   dstEid: 30109,
@@ -29,6 +30,7 @@ describe("single burn destination contract", () => {
     await wallet.enable();
     const request = args();
     const pending = wallet.burnAsset(request);
+    request.burnDestination.version = 2;
     request.burnDestination.dstEid = 30101;
     request.amount = "2";
     const response = await pending;
@@ -53,11 +55,29 @@ describe("single burn destination contract", () => {
       { ...args(), burnDestination: { ...destination, dstEid: undefined } },
       { ...args(), burnDestination: { ...destination, dstEid: -1 } },
       { ...args(), burnDestination: { ...destination, dstEid: 2 ** 32 } },
-      { ...args(), burnDestination: { ...destination, version: 1 } },
       { ...args(), burnDestination: { ...destination, destinationChainId: 137 } },
       { ...args(), feeRate: 0 }, { ...args(), minConfirmations: 256 },
     ]) {
       await assert.rejects(wallet.burnAsset(request), { code: "INVALID_PARAMS" });
+    }
+    assert.equal(called, false);
+    await assert.rejects(wallet.burnAsset(args()), { code: "USER_REJECTED" });
+    assert.equal(called, false);
+  });
+
+  it("rejects missing and unsupported versions before confirmation or burn", async () => {
+    let called = false;
+    const wallet = createMockProvider({
+      assets: [{ id: "rgb:bfa" }], rejectConfirmations: true,
+      burnAsset: async (request) => { called = true; return result(request); },
+    });
+    await wallet.enable();
+    const { version, ...unversioned } = destination;
+    for (const burnDestination of [
+      unversioned,
+      ...[undefined, null, "1", 0, 2, 1.5, true].map((version) => ({ ...destination, version })),
+    ]) {
+      await assert.rejects(wallet.burnAsset({ ...args(), burnDestination }), { code: "INVALID_PARAMS" });
     }
     assert.equal(called, false);
     await assert.rejects(wallet.burnAsset(args()), { code: "USER_REJECTED" });

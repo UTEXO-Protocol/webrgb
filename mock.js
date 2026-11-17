@@ -267,11 +267,11 @@ export function createMockProvider(options = {}) {
         const destination = request?.burnDestination;
         if (!request || "burnRecipient" in request || request.network !== network ||
             typeof request.amount !== "string" || !/^[1-9]\d*$/.test(request.amount) ||
-            BigInt(request.amount) > 18446744073709551615n || !destination ||
+            BigInt(request.amount) > 18446744073709551615n || !destination || destination.version !== 1 ||
             typeof destination.chainId !== "string" || !destination.chainId.includes(":") ||
             typeof destination.address !== "string" || !destination.address ||
             !Number.isInteger(destination.dstEid) || destination.dstEid < 0 || destination.dstEid > 0xffffffff ||
-            "version" in destination || "destinationChainId" in destination || "recipient" in destination ||
+            "destinationChainId" in destination || "recipient" in destination ||
             (request.feeRate !== undefined && (!Number.isSafeInteger(request.feeRate) || request.feeRate < 1)) ||
             (request.minConfirmations !== undefined && (!Number.isInteger(request.minConfirmations) || request.minConfirmations < 1 || request.minConfirmations > 255))) {
           throw fail("burnAsset requires a single native-address destination and exact amount", "INVALID_PARAMS");
