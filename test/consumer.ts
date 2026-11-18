@@ -195,6 +195,16 @@ async function inspectPreparedMint(provider: RgbProvider, invoice: string): Prom
     bridgeContract: received.bridgeContract,
   };
   withoutTxid.lockId.toUpperCase();
+  const anyAssetReceipt: RgbReceivedMint = {
+    ...withoutTxid,
+    invoice: "rgb:~/~/bcrt:utxob:owned",
+    assetId: "rgb:validated",
+  };
+  anyAssetReceipt.assetId.toUpperCase();
+  const { assetId: _provenAsset, ...withoutAssetId } = anyAssetReceipt;
+  // @ts-expect-error every receipt carries the asset of the validated consignment
+  const missingAssetId: RgbReceivedMint = withoutAssetId;
+  void missingAssetId;
   // @ts-expect-error recipient-only lookup does not bind the exact invoice
   await provider.getReceivedMint({ recipientId: "utxob:seal" });
   // @ts-expect-error a bare string is not the negotiated request object

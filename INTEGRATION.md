@@ -93,28 +93,47 @@ The wallet asks for approval. Your backend can verify the returned signature.
 ### Checking a prepared mint
 
 Request `getReceivedMint` when connecting if your transport negotiates method
-access. Enable the provider and create an invoice with the selected `assetId`;
-an any-asset invoice is rejected. Pass the invoice unchanged to the bridge to
-prepare the mint, then check the wallet's result:
+access. Enable the provider and create an invoice with the selected `assetId`.
+A wallet that has never held the asset rejects that with `ASSET_NOT_FOUND`; only
+then request an invoice without an asset. Pass the invoice unchanged to the
+bridge to prepare the mint, then check the wallet's result:
 
 ```ts
-import { supports } from "@utexo/webrgb";
+import { providerErrorCode, supports } from "@utexo/webrgb";
 
 const info = await provider.getInfo();
 if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) {
   throw new Error("This wallet cannot check a prepared mint");
 }
-const { invoice } = await provider.witnessReceive({ assetId });
+
+async function createMintInvoice(assetId: string): Promise<string> {
+  try {
+    return (await provider.witnessReceive({ assetId })).invoice;
+  } catch (error) {
+    if (providerErrorCode(error) !== "ASSET_NOT_FOUND") throw error;
+    return (await provider.witnessReceive()).invoice;
+  }
+}
+
+const invoice = await createMintInvoice(assetId);
 await prepareMint(invoice); // application-specific bridge preparation
 const receipt = await provider.getReceivedMint({ invoice });
+if (receipt && receipt.assetId !== assetId) {
+  throw new Error("The validated mint is for a different asset");
+}
 ```
 
 `null` means pending; poll the same invoice without additional consent and
-handle errors separately. `txid` may be absent before payment; match `lockId`
-instead, which already commits to the witness transaction. Before paying:
+handle errors separately. A wallet that cannot prove the asset of an any-asset
+invoice rejects it with `INVALID_PARAMS`; do not pay in that case. `txid` may be
+absent before payment; match `lockId` instead, which already commits to the
+witness transaction. Before paying:
 
-1. Compare the receipt's exact invoice, network, asset, net RGB amount, lock
-   ID, EVM chain ID, bridge contract and deadline against the prepared mint.
+1. Compare the receipt's `assetId` with the asset you selected and do not pay if
+   they differ. An any-asset invoice does not restrict the asset, so this check
+   is what binds the mint to your selection. Also compare the receipt's exact
+   invoice, network, net RGB amount, lock ID, EVM chain ID, bridge contract and
+   deadline against the prepared mint.
    `opid` identifies an RGB transition. Use the bridge's own operation ID
    separately for tracking.
 2. Independently verify the current EVM chain, lock contract and exclusive
@@ -140,9 +159,12 @@ Pass the asset ID, exact amount, commitment as `burn_reason` (64 lowercase hex
 characters without `0x`), fee rate and confirmation count to rgb-lib.
 
 For `getReceivedMint`, bind the full invoice to the active wallet before a
-native recipient-only lookup. Reject any-asset invoices with `INVALID_PARAMS`
-and verify the consignment matches the invoice's asset. Do not wait for
-`assetId` or `txid` in transfer history before returning a checked mint.
+native recipient-only lookup. Return `assetId` from the consignment validated
+for this mint in every receipt. Never copy it from the request, dApp state or any
+other unvalidated source. If the invoice names an asset, reject a consignment for
+a different one. If the wallet cannot take the asset of an any-asset invoice from
+the validated consignment, reject that invoice with `INVALID_PARAMS`. Do not wait
+for `assetId` or `txid` in transfer history before returning a checked mint.
 Proof validation belongs to the wallet, not this package or its mock.
 
 ### Optional native methods
