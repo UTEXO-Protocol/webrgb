@@ -93,10 +93,11 @@ The wallet asks for approval. Your backend can verify the returned signature.
 ### Checking a prepared mint
 
 Request `getReceivedMint` when connecting if your transport negotiates method
-access. Enable the provider and create an invoice with the selected `assetId`.
-A wallet that has never held the asset rejects that with `ASSET_NOT_FOUND`; only
-then request an invoice without an asset. Pass the invoice unchanged to the
-bridge to prepare the mint, then check the wallet's result:
+access. Enable the provider, then check the selected asset with
+`getAssetBalance`. Create an invoice with `assetId` when the wallet knows the
+asset, and without it when the check rejects with `ASSET_NOT_FOUND`. Pass the
+invoice unchanged to the bridge to prepare the mint, then check the wallet's
+result:
 
 ```ts
 import { providerErrorCode, supports } from "@utexo/webrgb";
@@ -106,13 +107,19 @@ if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) {
   throw new Error("This wallet cannot check a prepared mint");
 }
 
-async function createMintInvoice(assetId: string): Promise<string> {
+async function walletKnowsAsset(assetId: string): Promise<boolean> {
   try {
-    return (await provider.witnessReceive({ assetId })).invoice;
+    await provider.getAssetBalance(assetId);
+    return true;
   } catch (error) {
-    if (providerErrorCode(error) !== "ASSET_NOT_FOUND") throw error;
-    return (await provider.witnessReceive()).invoice;
+    if (providerErrorCode(error) === "ASSET_NOT_FOUND") return false;
+    throw error;
   }
+}
+
+async function createMintInvoice(assetId: string): Promise<string> {
+  const args = (await walletKnowsAsset(assetId)) ? { assetId } : {};
+  return (await provider.witnessReceive(args)).invoice;
 }
 
 const invoice = await createMintInvoice(assetId);
@@ -159,12 +166,13 @@ Pass the asset ID, exact amount, commitment as `burn_reason` (64 lowercase hex
 characters without `0x`), fee rate and confirmation count to rgb-lib.
 
 For `getReceivedMint`, bind the full invoice to the active wallet before a
-native recipient-only lookup. Return `assetId` from the consignment validated
-for this mint in every receipt. Never copy it from the request, dApp state or any
-other unvalidated source. If the invoice names an asset, reject a consignment for
-a different one. If the wallet cannot take the asset of an any-asset invoice from
-the validated consignment, reject that invoice with `INVALID_PARAMS`. Do not wait
-for `assetId` or `txid` in transfer history before returning a checked mint.
+native recipient-only lookup. Every receipt carries `assetId`. For an any-asset
+invoice, take it only from the consignment validated for this mint, never from
+the request, dApp state or any other unvalidated source. If the wallet cannot do
+that, reject the invoice with `INVALID_PARAMS`. If the invoice names an asset,
+return that asset only after validation has matched the consignment to it, and
+reject a consignment for a different one. Do not wait for `assetId` or `txid` in
+transfer history before returning a checked mint.
 Proof validation belongs to the wallet, not this package or its mock.
 
 ### Recommended `getReceivedMint` flow with rgb-lib

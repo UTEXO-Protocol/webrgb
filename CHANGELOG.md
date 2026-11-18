@@ -6,6 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Documentation
+
+- Check the selected asset with `getAssetBalance` before creating a mint invoice,
+  instead of retrying after `ASSET_NOT_FOUND`. Align the `getReceivedMint` wallet
+  guidance with SPEC for invoices that name an asset.
+
 ## [0.1.7]
 
 ### Changed

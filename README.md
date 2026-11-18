@@ -148,7 +148,7 @@ console.log(formatReport(await runConformance(window.rgb!)));
 | `NOT_ENABLED` | Called before `enable()` resolved for this origin |
 | `METHOD_NOT_SUPPORTED` | The connected wallet cannot serve this method, or no provider was found |
 | `INVALID_PARAMS` | An argument is malformed or out of range; `error.message` names it |
-| `ASSET_NOT_FOUND` | The call names an asset the wallet does not know — for `blindReceive`, omit `assetId` |
+| `ASSET_NOT_FOUND` | The call names an asset the wallet does not know — for `blindReceive` or `witnessReceive`, request an any-asset invoice |
 | `NO_AVAILABLE_UTXOS` | No available RGB allocation slot; create UTXOs or use a witness invoice |
 | `INTERNAL_ERROR` | Anything else; see `error.message` |
 
