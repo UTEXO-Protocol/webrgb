@@ -696,4 +696,32 @@ describe("optional received mint fixture", () => {
     await assert.rejects(provider.getReceivedMint({ invoice }), { code: "INVALID_PARAMS" });
     assert.equal(calls, 2);
   });
+  it("returns an any-asset receipt unchanged, with the asset the wallet validated", async () => {
+    const invoice = "rgb:~/~/bcrt:utxob:owned";
+    const receipt = {
+      invoice,
+      recipientId: "bcrt:utxob:owned",
+      assetId: "rgb:validated",
+      network: "regtest",
+      opid: "a".repeat(64),
+      lockId: "b".repeat(64),
+      amount: "1000",
+      beforeBlock: "2000",
+      evmChainId: "42161",
+      bridgeContract: `0x${"c".repeat(40)}`,
+    };
+    const provider = createMockProvider({ getReceivedMint: async () => receipt });
+    await provider.enable();
+    assert.deepEqual(await provider.getReceivedMint({ invoice }), receipt);
+  });
+  it("surfaces INVALID_PARAMS from a wallet that cannot prove an any-asset invoice", async () => {
+    const provider = createMockProvider({ getReceivedMint: async () => {
+      throw Object.assign(new Error("Cannot prove the asset"), { code: "INVALID_PARAMS" });
+    } });
+    await provider.enable();
+    await assert.rejects(provider.getReceivedMint({ invoice: "rgb:~/~/bcrt:utxob:owned" }), (err) => {
+      assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+      return true;
+    });
+  });
 });

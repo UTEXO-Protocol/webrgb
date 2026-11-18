@@ -189,7 +189,7 @@ export interface RgbAssetMetadata {
   media: { mime: string; digest: string } | null;
 }
 
-/** Exact wallet-created, asset-specific invoice, including its recipient, public key and expiry. */
+/** Exact wallet-created invoice, including its recipient, public key and expiry. */
 export interface RgbGetReceivedMintArgs {
   invoice: string;
 }
@@ -199,7 +199,10 @@ export interface RgbReceivedMint {
   /** The unchanged invoice supplied to getReceivedMint. */
   invoice: string;
   recipientId: string;
-  /** The asset the invoice names, matched by the validated consignment. */
+  /**
+   * The asset of the validated consignment, also for an any-asset invoice.
+   * Compare it with the selected asset before paying.
+   */
   assetId: string;
   /** Same network identifier as getInfo().network. */
   network: string;

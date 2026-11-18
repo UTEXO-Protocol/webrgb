@@ -1,6 +1,6 @@
 # The WebRGB provider interface
 
-**Status:** draft, WebRGB 0.1.6 contract. The base interface follows the KaleidoSwap
+**Status:** draft, WebRGB 0.1.7 contract. The base interface follows the KaleidoSwap
 browser extension ≥ 0.3.0 and is described by `index.d.ts` in this repository.
 The `burnAsset`, `getConsignment` and `getReceivedMint` methods are optional
 BFA extensions provided by this fork.
@@ -192,13 +192,17 @@ around them.
   method and invoice, that the invoice belongs to the active account, and
   that its recipient, public key, expiry, assignment and transport data match
   the wallet's record. A recipient ID alone is insufficient.
-  The invoice MUST name an asset; an any-asset invoice MUST reject with
-  `INVALID_PARAMS`.
+  The invoice MAY omit the asset. For an any-asset invoice, the wallet MUST take
+  `assetId` from the consignment it validated for this mint and MUST NOT copy it
+  from the request, dApp state or any other unvalidated source. A wallet that
+  cannot do so MUST reject an any-asset invoice with `INVALID_PARAMS`.
   The wallet MUST refresh incoming state and bind the checked mint and its
   consignment to that exact invoice. The result is
   [`RgbReceivedMint`](./index.d.ts), with the original invoice, the wallet's
-  network as returned by `getInfo()`, and `assetId` equal to the invoice's
-  asset and matched by the validated proof. `txid` MAY be absent before the
+  network as returned by `getInfo()`, and `assetId` identifying the asset of
+  the validated consignment. `assetId` is REQUIRED in every receipt. If the
+  invoice names an asset, the validated consignment MUST match it, and a
+  mismatch MUST reject. `txid` MAY be absent before the
   lock is paid; `lockId` already commits to the witness transaction. Its
   absence MUST NOT turn an otherwise checked mint into a pending result.
   The method MUST return `null` only while a valid, authorized invoice has
@@ -210,8 +214,11 @@ around them.
   A wallet MAY use previously checked mint terms during refresh. A receipt
   does not establish current EVM connectivity, current reject-list acceptance
   or settlement. Before paying, the dApp MUST match the receipt to its
-  intended operation and verify current lock-chain state. A change of
-  session, account, network, invoice or mint preparation invalidates the
+  intended operation and verify current lock-chain state.
+  Before paying, the dApp MUST compare the receipt's `assetId` with the asset it
+  selected and MUST NOT pay if they differ. An any-asset invoice does not restrict
+  the asset, so this comparison is what binds the mint to the selected asset.
+  A change of session, account, network, invoice or mint preparation invalidates the
   prior result. See [the integration guide](./INTEGRATION.md#checking-a-prepared-mint).
 - **`listAssets()`** and **`listTransfers(assetId?)`** MUST return arrays.
   (Wallets that wrap them exist; `toAssetArray` / `toTransferArray` in this
