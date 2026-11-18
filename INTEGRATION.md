@@ -167,6 +167,30 @@ the validated consignment, reject that invoice with `INVALID_PARAMS`. Do not wai
 for `assetId` or `txid` in transfer history before returning a checked mint.
 Proof validation belongs to the wallet, not this package or its mock.
 
+### Recommended `getReceivedMint` flow with rgb-lib
+
+This flow is informative. [SPEC.md](./SPEC.md) defines the required behaviour.
+
+1. Decode the invoice and check its network. Find the one receive of this wallet
+   with the same recipient ID and the exact same invoice string.
+2. Call `refresh` for incoming transfers. It reports a per-transfer `failure` in
+   its result instead of throwing, so reject if this receive has one.
+3. Call `get_received_mint(recipient_id)` and read the receive again. Reject if
+   the receive failed. If there is no mint, reject an expired invoice and
+   otherwise return `null`.
+4. Take the receive's single `consignment_path` and call `inspect_consignment`
+   with the `Terminals` bundle filter.
+5. Require an operation of the inspected asset with a transition whose `opid`
+   equals the mint's `opid`. Inspection does not validate the consignment again;
+   this match ties the file to the mint rgb-lib already checked.
+6. Return the inspected asset ID as `assetId`. If the invoice names an asset,
+   reject a different one.
+
+rgb-lib's `ReceivedMint` has no asset ID, and an any-asset receive is linked to
+its asset only once the lock is found, so do not read `assetId` from transfer
+history. A wallet that cannot inspect the consignment must reject any-asset
+invoices with `INVALID_PARAMS`.
+
 ### Optional native methods
 
 | WebRGB method | rgb-lib mapping |
