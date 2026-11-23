@@ -148,7 +148,7 @@ export interface RgbCreateUtxosArgs {
   num?: number;
   /** Sats per output, a positive u32; wallet policy may enforce a higher minimum. */
   size?: number;
-  /** Positive integer sat/vB; wallet estimate when omitted. */
+  /** Positive finite sat/vB, fractions allowed; wallet estimate when omitted. */
   feeRate?: number;
 }
 
@@ -337,7 +337,7 @@ export interface RgbBurnAssetArgs {
   /** Canonical positive base-unit decimal integer, at most 18446744073709551615 (u64). */
   amount: string;
   burnDestination: RgbBurnDestination;
-  /** Positive safe integer sat/vB; the wallet validates backend limits. */
+  /** Positive finite sat/vB, fractions allowed; the wallet validates backend limits. */
   feeRate?: number;
   /** Integer in 1..255; the wallet may raise it to its confirmation floor. */
   minConfirmations?: number;

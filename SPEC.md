@@ -118,8 +118,8 @@ around them.
   challenge it issued. The wallet signs with a key it keeps stable across
   calls, so the recovered key identifies it from one session to the next. The wallet
   MUST show the message unchanged with the requesting origin, and MUST reject
-  a non-string `message`, or one that is not well-formed Unicode, with
-  `INVALID_PARAMS` before prompting. An empty message is signed like any other.
+  an empty or non-string `message`, or one that is not well-formed Unicode,
+  with `INVALID_PARAMS` before prompting.
 - **`blindReceive({ assetId?, amount?, minConfirmations?, … })`** returns an
   RGB invoice against a blinded UTXO. Omitting `amount` means any amount.
   Omitting `assetId` means any asset: the invoice names no contract, and it is
@@ -137,14 +137,16 @@ around them.
 - **`witnessReceive(args?)`** returns an RGB invoice for an output created
   by the sender's transaction, without requiring an existing receiver UTXO.
   Its parameters, result and confirmation rules are the same as `blindReceive`.
-- **`createUtxos({ num?, size?, feeRate? })`** creates colorable
-  UTXOs using the wallet's bitcoin. `num` is 1..255, `size` is a positive u32
-  in sats, and `feeRate` is a positive safe integer in sat/vB. Wallet defaults
-  apply when omitted. The wallet MUST validate backend limits and show the
-  actual outputs and fee before signing. Return the actual `created` count,
-  size and, when available, fee rate; fewer outputs may be created than requested. Invalid
-  parameters reject with `INVALID_PARAMS`; insufficient BTC uses
-  `INTERNAL_ERROR`. Never retry this spending operation automatically.
+- **`createUtxos({ num?, size?, feeRate? })`** creates colorable UTXOs
+  using the wallet's bitcoin and returns `{ created, size, feeRate? }`. `num`
+  is 1..255, `size` is a positive u32 in sats, and `feeRate` is a positive
+  finite number in sat/vB. Omitted arguments take wallet defaults. Bad
+  arguments, including values outside the backend's limits, MUST reject with
+  `INVALID_PARAMS` before prompting. The wallet MUST show the actual outputs
+  and fee before signing. Return the actual `created` count, size and, when
+  available, the fee rate used; fewer outputs may be created than requested.
+  A wallet without enough bitcoin MUST reject with `INTERNAL_ERROR` and a
+  message saying so. Never retry this spending operation automatically.
 - **`cancelReceive(recipientId)`** fails a pending receive the wallet created,
   releasing the UTXO a blinded invoice reserved, and resolves
   `{ cancelled: true }`. Only a receive still `WaitingCounterparty` can be
@@ -193,7 +195,7 @@ around them.
 - **`burnAsset({ network, assetId, amount, burnDestination, … })`** burns a BFA
   and returns its transaction ID after broadcast. `amount` is a canonical positive
   u64 decimal string in base units; `network` MUST match the connected RGB network.
-  When provided, `feeRate` is a positive safe integer in sat/vB and
+  When provided, `feeRate` is a positive finite number in sat/vB and
   `minConfirmations` is an integer in 1..255; wallets may enforce higher floors.
   `burnDestination` is the single required `{ version: 1, chainId, address, dstEid }` object
   defined in `RgbBurnDestination`. `address` is native, not a precomputed hash.

@@ -18,6 +18,37 @@ const CORE_METHODS = [
 
 const LN_METHODS = ["makeLnInvoice", "payLnInvoice"];
 
+// Every method `RgbProvider` declares, served or not.
+/** @type {readonly Exclude<keyof import("./index.js").RgbProvider, "enabled">[]} */
+const PROVIDER_METHODS = [
+  "enable",
+  "getInfo",
+  "getAddress",
+  "signMessage",
+  "blindReceive",
+  "witnessReceive",
+  "createUtxos",
+  "cancelReceive",
+  "getBtcBalance",
+  "refresh",
+  "getAssetMetadata",
+  "signPsbt",
+  "issueAsset",
+  "listAssets",
+  "getAssetBalance",
+  "sendAsset",
+  "burnAsset",
+  "getConsignment",
+  "getReceivedMint",
+  "listTransfers",
+  "getTransferStatus",
+  "decodeRgbInvoice",
+  "makeLnInvoice",
+  "payLnInvoice",
+  "on",
+  "off",
+];
+
 /**
  * @param {import("./index.js").RgbProvider} provider
  * @param {import("./conformance.js").ConformanceOptions} [options]
@@ -129,6 +160,11 @@ export async function runConformance(provider, options = {}) {
     } else {
       assert(listed.length === 0, `non-RGB_LN wallet lists ${listed.join(", ")}`);
     }
+  });
+
+  await check("methods-present", () => {
+    const missing = PROVIDER_METHODS.filter((m) => typeof provider[m] !== "function");
+    assert(missing.length === 0, `provider lacks ${missing.join(", ")}; unserved methods must reject instead`);
   });
 
   await check("witnessReceive-available", () => {

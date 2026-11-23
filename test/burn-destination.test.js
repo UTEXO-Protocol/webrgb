@@ -56,7 +56,8 @@ describe("single burn destination contract", () => {
       { ...args(), burnDestination: { ...destination, dstEid: -1 } },
       { ...args(), burnDestination: { ...destination, dstEid: 2 ** 32 } },
       { ...args(), burnDestination: { ...destination, destinationChainId: 137 } },
-      { ...args(), feeRate: 0 }, { ...args(), minConfirmations: 256 },
+      { ...args(), feeRate: 0 }, { ...args(), feeRate: Infinity }, { ...args(), feeRate: NaN },
+      { ...args(), minConfirmations: 256 },
     ]) {
       await assert.rejects(wallet.burnAsset(request), { code: "INVALID_PARAMS" });
     }

@@ -12,9 +12,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
   `signPsbt(psbt, opts?)`, error code `UNSAFE_PSBT`, `mockPsbt()`, transport
   adapters in SPEC.md §1, and a deterministic default signer in the mock.
   Where both sides defined a method, this fork keeps its stricter contract:
-  `issuedSupply` stays an exact u64 decimal string, `freeColorableUtxos: 0`
-  does not imply `NO_AVAILABLE_UTXOS`, and `signMessage` accepts an empty
-  message.
+  `issuedSupply` stays an exact u64 decimal string, and `freeColorableUtxos: 0`
+  does not imply `NO_AVAILABLE_UTXOS`.
+
+### Changed
+
+- `feeRate` in `createUtxos` and `burnAsset` accepts any positive finite
+  sat/vB, as upstream does, instead of integers only. Wallets reject rates
+  outside their backend's limits with `INVALID_PARAMS`; rgb-lib wallets round
+  a fractional rate up to whole sat/vB.
+- `createUtxos` again requires argument checks before the prompt and an
+  `INTERNAL_ERROR` message that explains the bitcoin shortfall, as upstream
+  does.
 
 ### Breaking
 
@@ -25,9 +34,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
   still define it and reject with `METHOD_NOT_SUPPORTED`. This matches the
   KaleidoSwap `@kaleidorg/webrgb` contract. Code that calls `supports()` keeps
   working; the old `provider.method &&` checks can be dropped.
-- The conformance suite fails a missing method even when it is unlisted, and
-  calls unlisted read-only methods to check that they reject with
-  `METHOD_NOT_SUPPORTED`.
+- `signMessage("")` rejects with `INVALID_PARAMS` again, matching upstream.
+  A message containing an unpaired surrogate also rejects.
+- The conformance suite fails a provider that lacks any declared method
+  (`methods-present`), even an unlisted one, and calls unlisted read-only
+  methods to check that they reject with `METHOD_NOT_SUPPORTED`.
 - `createMockProvider()` always defines `burnAsset` and `getConsignment`;
   unconfigured, they reject with `METHOD_NOT_SUPPORTED`.
 

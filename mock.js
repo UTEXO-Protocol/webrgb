@@ -195,8 +195,8 @@ export function createMockProvider(options = {}) {
     /** @param {string} message */
     async signMessage(message) {
       await call("signMessage", [message]);
-      if (typeof message !== "string" || /[\uD800-\uDFFF]/u.test(message)) {
-        throw fail("message must be a well-formed Unicode string", "INVALID_PARAMS");
+      if (typeof message !== "string" || message.length === 0 || /[\uD800-\uDFFF]/u.test(message)) {
+        throw fail("message must be a non-empty, well-formed Unicode string", "INVALID_PARAMS");
       }
       confirm();
       if (options.signMessage) return options.signMessage(message);
@@ -230,11 +230,11 @@ export function createMockProvider(options = {}) {
       const feeRate = args.feeRate ?? 2;
       if (!Number.isInteger(num) || num < 1 || num > 255 ||
           !Number.isInteger(size) || size < 1 || size > 0xffffffff ||
-          !Number.isSafeInteger(feeRate) || feeRate < 1) {
+          typeof feeRate !== "number" || !Number.isFinite(feeRate) || feeRate <= 0) {
         throw fail("Invalid UTXO count, size or fee rate", "INVALID_PARAMS");
       }
       // A deterministic test fee, not a real Bitcoin transaction estimate.
-      const cost = num * size + feeRate * (110 + 43 * num);
+      const cost = num * size + Math.ceil(feeRate * (110 + 43 * num));
       if (!Number.isSafeInteger(cost) || cost > vanillaSats) {
         throw fail("Not enough bitcoin to create UTXOs", "INTERNAL_ERROR");
       }
@@ -313,7 +313,7 @@ export function createMockProvider(options = {}) {
           typeof destination.address !== "string" || !destination.address ||
           !Number.isInteger(destination.dstEid) || destination.dstEid < 0 || destination.dstEid > 0xffffffff ||
           "destinationChainId" in destination || "recipient" in destination ||
-          (request.feeRate !== undefined && (!Number.isSafeInteger(request.feeRate) || request.feeRate < 1)) ||
+          (request.feeRate !== undefined && (typeof request.feeRate !== "number" || !Number.isFinite(request.feeRate) || request.feeRate <= 0)) ||
           (request.minConfirmations !== undefined && (!Number.isInteger(request.minConfirmations) || request.minConfirmations < 1 || request.minConfirmations > 255))) {
         throw fail("burnAsset requires a single native-address destination and exact amount", "INVALID_PARAMS");
       }
