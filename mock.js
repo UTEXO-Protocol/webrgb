@@ -11,9 +11,12 @@ const BASE_METHODS = [
   "blindReceive",
   "witnessReceive",
   "createUtxos",
+  "cancelReceive",
   "getBtcBalance",
   "refresh",
   "getAssetMetadata",
+  "signPsbt",
+  "signMessage",
   "issueAsset",
   "listAssets",
   "getAssetBalance",
@@ -49,14 +52,14 @@ export function createMockProvider(options = {}) {
   const autoEnable = options.autoEnable ?? true;
   const latencyMs = options.latencyMs ?? 0;
   const minConfirmationsFloor = options.minConfirmationsFloor ?? 1;
+  const utxoSize = 3000;
   let freeUtxos = options.freeColorableUtxos ?? 5;
   let vanillaSats = options.vanillaSats ?? 100_000;
-  let coloredSats = freeUtxos * 3000;
+  let coloredSats = freeUtxos * utxoSize;
   const createdAt = Math.floor(Date.now() / 1000);
   const methods = options.methods ?? [
     ...BASE_METHODS,
     ...(protocol === "RGB_LN" ? LN_METHODS : []),
-    ...(options.signMessage ? ["signMessage"] : []),
     ...(options.getReceivedMint ? ["getReceivedMint"] : []),
     ...(options.burnAsset ? ["burnAsset"] : []),
   ];
@@ -71,6 +74,9 @@ export function createMockProvider(options = {}) {
 
   /** @type {import("./index.js").RgbTransfer[]} */
   let transfers = [];
+  /** Pending receives by recipient id; `blinded` ones hold a UTXO. */
+  /** @type {Map<string, { blinded: boolean, status: string }>} */
+  const receives = new Map();
   /** @type {import("./mock.js").MockCall[]} */
   let calls = [];
   /** @type {Map<string, Set<(transfer: import("./index.js").RgbTransfer) => void>>} */
@@ -120,13 +126,9 @@ export function createMockProvider(options = {}) {
     }
     confirm();
     if (method === "blindReceive") freeUtxos -= 1;
-    const recipientId = `${method === "blindReceive" ? "utxob" : "wvout"}:mock${nextId()}`;
-    return {
-      invoice: `${args.assetId ?? "rgb:~"}/RGB20/${recipientId}`,
-      recipientId,
-      expirationTimestamp: Math.floor(Date.now() / 1000) + (args.durationSeconds ?? 86400),
-      minConfirmations: Math.max(args.minConfirmations ?? 1, minConfirmationsFloor),
-    };
+    return method === "blindReceive"
+      ? receiveInvoice(args, "utxob", true)
+      : receiveInvoice(args, "wvout", false);
   }
 
   /**
@@ -135,6 +137,23 @@ export function createMockProvider(options = {}) {
    */
   function emit(event, transfer) {
     for (const listener of listeners.get(event) ?? []) listener(transfer);
+  }
+
+  /**
+   * @param {import("./index.js").RgbBlindReceiveArgs} args
+   * @param {"utxob" | "wvout"} kind
+   * @param {boolean} blinded
+   */
+  function receiveInvoice(args, kind, blinded) {
+    const recipientId = `${kind}:mock${nextId()}`;
+    receives.set(recipientId, { blinded, status: "WaitingCounterparty" });
+    return {
+      // An any-asset invoice leaves the contract out, like rgb-lib's `rgb:~/…`.
+      invoice: `${args.assetId ?? "rgb:~"}/RGB20/${recipientId}`,
+      recipientId,
+      expirationTimestamp: Math.floor(Date.now() / 1000) + (args.durationSeconds ?? 86400),
+      minConfirmations: Math.max(args.minConfirmations ?? 1, minConfirmationsFloor),
+    };
   }
 
   const provider = {
@@ -176,12 +195,21 @@ export function createMockProvider(options = {}) {
     /** @param {string} message */
     async signMessage(message) {
       await call("signMessage", [message]);
-      if (!options.signMessage) throw fail("No message signer configured", "METHOD_NOT_SUPPORTED");
       if (typeof message !== "string" || /[\uD800-\uDFFF]/u.test(message)) {
         throw fail("message must be a well-formed Unicode string", "INVALID_PARAMS");
       }
       confirm();
-      return options.signMessage(message);
+      if (options.signMessage) return options.signMessage(message);
+      // Not a real signature: a deterministic stand-in in the zbase32 alphabet.
+      let hash = 0;
+      for (const ch of message) hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
+      const alphabet = "ybndrfg8ejkmcpqxot1uwisza345h769";
+      let signature = "";
+      for (let i = 0; i < 104; i++) {
+        hash = (hash * 1103515245 + 12345) >>> 0;
+        signature += alphabet[hash >>> 27];
+      }
+      return { signature };
     },
 
     /** @param {import("./index.js").RgbBlindReceiveArgs} [args] */
@@ -215,6 +243,20 @@ export function createMockProvider(options = {}) {
       coloredSats += num * size;
       freeUtxos += num;
       return { created: num, size, feeRate };
+    },
+
+    /** @param {string} recipientId */
+    async cancelReceive(recipientId) {
+      await call("cancelReceive", [recipientId]);
+      if (typeof recipientId !== "string" || !/^(utxob|wvout):\S+$/.test(recipientId)) {
+        throw fail(`Invalid recipientId: ${String(recipientId)}`, "INVALID_PARAMS");
+      }
+      confirm();
+      const pending = receives.get(recipientId);
+      if (!pending || pending.status !== "WaitingCounterparty") return { cancelled: false };
+      pending.status = "Failed";
+      if (pending.blinded) freeUtxos += 1;
+      return { cancelled: true };
     },
 
     async getBtcBalance() {
@@ -285,6 +327,28 @@ export function createMockProvider(options = {}) {
     async getConsignment(args) {
       await call("getConsignment", [args]);
       throw fail("The mock keeps no burn consignments", "METHOD_NOT_SUPPORTED");
+    },
+
+    /**
+     * @param {string} psbt
+     * @param {import("./index.js").RgbSignPsbtOptions} [opts]
+     */
+    async signPsbt(psbt, opts = {}) {
+      await call("signPsbt", opts.finalize === undefined ? [psbt] : [psbt, opts]);
+      const parsed = readMockPsbt(psbt);
+      const mine = parsed.inputs.filter((input) => input.mine);
+      // Checked before the prompt: signing a colored input destroys its assets.
+      if (mine.some((input) => input.colored)) {
+        throw fail("The PSBT spends an input that holds RGB assets", "UNSAFE_PSBT");
+      }
+      if (mine.length === 0) throw fail("No input in the PSBT belongs to this wallet", "INVALID_PARAMS");
+      confirm();
+      const signed = {
+        ...parsed,
+        inputs: parsed.inputs.map((input) => (input.mine ? { ...input, signed: true } : input)),
+        finalized: opts.finalize === true,
+      };
+      return { psbt: btoa(JSON.stringify(signed)), signedInputs: mine.length };
     },
 
     /** @param {import("./index.js").RgbIssueAssetArgs} args */
@@ -483,6 +547,34 @@ function parseAssetId(invoice) {
 function parseRecipientId(invoice) {
   const match = /((?:utxob|wvout):[^?/]+)/.exec(invoice);
   return match ? match[1] : undefined;
+}
+
+/**
+ * The mock cannot sign Bitcoin: its PSBT is base64 JSON naming which inputs
+ * the wallet owns and which hold RGB assets, enough to exercise the rules.
+ * @param {import("./mock.js").MockPsbt} spec
+ * @returns {string}
+ */
+export function mockPsbt(spec) {
+  return btoa(JSON.stringify({ mockPsbt: 1, outputs: [], ...spec }));
+}
+
+/**
+ * @param {unknown} psbt
+ * @returns {import("./mock.js").MockPsbt}
+ */
+function readMockPsbt(psbt) {
+  /** @type {any} */
+  let parsed;
+  try {
+    parsed = typeof psbt === "string" && psbt !== "" ? JSON.parse(atob(psbt)) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || parsed.mockPsbt !== 1 || !Array.isArray(parsed.inputs)) {
+    throw fail("Not a PSBT this mock can read; build one with mockPsbt()", "INVALID_PARAMS");
+  }
+  return parsed;
 }
 
 /**

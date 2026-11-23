@@ -145,7 +145,7 @@ export async function runConformance(provider, options = {}) {
     refresh: () => provider.refresh("rgb:webrgb-conformance-no-such-asset"),
     getAssetMetadata: () => provider.getAssetMetadata("rgb:webrgb-conformance-no-such-asset"),
   };
-  for (const method of /** @type {const} */ (["burnAsset", "getConsignment", "signMessage", "getReceivedMint", "createUtxos", "getBtcBalance", "refresh", "getAssetMetadata"])) {
+  for (const method of /** @type {const} */ (["burnAsset", "getConsignment", "signMessage", "getReceivedMint", "createUtxos", "cancelReceive", "getBtcBalance", "refresh", "getAssetMetadata", "signPsbt"])) {
     await check(`${method}-available`, async () => {
       assert(typeof provider[method] === "function", `${method} is missing; unserved methods must reject instead`);
       if (!info) return "getInfo() did not return";
@@ -323,6 +323,26 @@ export async function runConformance(provider, options = {}) {
 }
 
 /**
+ * The path of the first field that looks like an outpoint, or `undefined`.
+ * @param {unknown} value
+ * @param {string} [path]
+ * @returns {string | undefined}
+ */
+function findOutpoint(value, path = "") {
+  if (typeof value === "string") {
+    return /^[0-9a-f]{64}:\d+$/i.test(value) ? path || "(root)" : undefined;
+  }
+  if (!value || typeof value !== "object") return undefined;
+  for (const [key, inner] of Object.entries(value)) {
+    const at = path ? `${path}.${key}` : key;
+    if (/^(outpoints?|txid|vout|utxos|unspents)$/i.test(key)) return at;
+    const found = findOutpoint(inner, at);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
  * @param {import("./conformance.js").ConformanceCheck[]} checks
  * @returns {import("./conformance.js").ConformanceReport}
  */
@@ -347,21 +367,4 @@ export function formatReport(report) {
       `${report.failed} failed, ${report.skipped} skipped`,
   );
   return lines.join("\n");
-}
-
-/**
- * @param {unknown} value
- * @param {string} [path]
- * @returns {string | undefined}
- */
-function findOutpoint(value, path = "") {
-  if (typeof value === "string") return /^[0-9a-f]{64}:\d+$/i.test(value) ? path || "(root)" : undefined;
-  if (!value || typeof value !== "object") return undefined;
-  for (const [key, inner] of Object.entries(value)) {
-    const at = path ? `${path}.${key}` : key;
-    if (/^(outpoints?|txid|vout|utxos|unspents)$/i.test(key)) return at;
-    const found = findOutpoint(inner, at);
-    if (found) return found;
-  }
-  return undefined;
 }

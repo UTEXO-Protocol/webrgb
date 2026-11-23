@@ -16,7 +16,7 @@ import {
   toAssetArray,
   toTransferArray,
 } from "../index.js";
-import { createMockProvider, installMockProvider } from "../mock.js";
+import { createMockProvider, installMockProvider, mockPsbt } from "../mock.js";
 import { formatReport, runConformance } from "../conformance.js";
 
 class FakeWindow extends EventTarget {}
@@ -240,6 +240,7 @@ describe("helpers", () => {
       "INVALID_PARAMS",
       "ASSET_NOT_FOUND",
       "NO_AVAILABLE_UTXOS",
+      "UNSAFE_PSBT",
       "INTERNAL_ERROR",
     ]);
     assert.throws(() => RGB_ERROR_CODES.push("NEW"));
@@ -443,6 +444,172 @@ describe("mock provider", () => {
     assert.equal(rgb.enabled, false);
   });
 
+  it("needs a free UTXO to receive blinded; createUtxos or witnessReceive fix it", async () => {
+    const rgb = createMockProvider({ freeColorableUtxos: 0 });
+    await rgb.enable();
+    assert.equal((await rgb.getBtcBalance()).freeColorableUtxos, 0);
+    await assert.rejects(rgb.blindReceive(), (err) => {
+      assert.equal(providerErrorCode(err), "NO_AVAILABLE_UTXOS");
+      return true;
+    });
+
+    const witness = await rgb.witnessReceive({ amount: 3 });
+    assert.match(witness.invoice, /wvout:/);
+    assert.match(String((await rgb.decodeRgbInvoice(witness.invoice)).recipientId), /^wvout:/);
+
+    const created = await rgb.createUtxos({ num: 2 });
+    assert.equal(created.created, 2);
+    assert.equal(created.size, 3000);
+    const balance = await rgb.getBtcBalance();
+    assert.equal(balance.freeColorableUtxos, 2);
+    assert.ok(balance.vanilla.spendable < 100_000);
+    assert.match((await rgb.blindReceive()).invoice, /utxob:/);
+  });
+
+  it("checks createUtxos arguments before prompting, and refuses without funds", async () => {
+    const rgb = createMockProvider({ rejectConfirmations: true });
+    await rgb.enable();
+    for (const bad of [{ num: 0 }, { size: 1.5 }, { feeRate: -1 }]) {
+      await assert.rejects(rgb.createUtxos(bad), (err) => {
+        assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+        return true;
+      });
+    }
+    await assert.rejects(rgb.createUtxos(), (err) => {
+      assert.equal(providerErrorCode(err), "USER_REJECTED");
+      return true;
+    });
+
+    const poor = createMockProvider({ vanillaSats: 1000 });
+    await poor.enable();
+    await assert.rejects(poor.createUtxos(), (err) => {
+      assert.equal(providerErrorCode(err), "INTERNAL_ERROR");
+      assert.match(err.message, /bitcoin/);
+      return true;
+    });
+  });
+
+  it("cancels a pending receive and releases its UTXO", async () => {
+    const rgb = createMockProvider({ freeColorableUtxos: 1 });
+    await rgb.enable();
+    const { recipientId } = await rgb.blindReceive();
+    assert.equal((await rgb.getBtcBalance()).freeColorableUtxos, 0);
+    assert.deepEqual(await rgb.cancelReceive(String(recipientId)), { cancelled: true });
+    assert.equal((await rgb.getBtcBalance()).freeColorableUtxos, 1);
+    assert.deepEqual(await rgb.cancelReceive(String(recipientId)), { cancelled: false });
+    assert.deepEqual(await rgb.cancelReceive("utxob:unknown"), { cancelled: false });
+    await assert.rejects(rgb.cancelReceive("nonsense"), (err) => {
+      assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+      return true;
+    });
+
+    const witness = await rgb.witnessReceive();
+    assert.deepEqual(await rgb.cancelReceive(String(witness.recipientId)), { cancelled: true });
+    assert.equal((await rgb.getBtcBalance()).freeColorableUtxos, 1);
+  });
+
+  it("signs a message deterministically and checks it before prompting", async () => {
+    const rgb = createMockProvider();
+    await rgb.enable();
+    const a = await rgb.signMessage("login:abc");
+    assert.match(a.signature, /^[ybndrfg8ejkmcpqxot1uwisza345h769]{104}$/);
+    assert.deepEqual(await rgb.signMessage("login:abc"), a);
+    assert.notEqual((await rgb.signMessage("login:abd")).signature, a.signature);
+
+    const refusing = createMockProvider({ rejectConfirmations: true });
+    await refusing.enable();
+    await assert.rejects(refusing.signMessage("\ud800"), (err) => {
+      assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+      return true;
+    });
+    await assert.rejects(refusing.signMessage("hi"), (err) => {
+      assert.equal(providerErrorCode(err), "USER_REJECTED");
+      return true;
+    });
+  });
+
+  it("reads balances, metadata and refreshes without prompting", async () => {
+    const rgb = createMockProvider({
+      rejectConfirmations: true,
+      assets: [{ id: "rgb:a", ticker: "A", name: "Alpha", precision: 2, balance: 40 }],
+    });
+    await rgb.enable();
+    const balance = await rgb.getBtcBalance();
+    assert.equal(balance.vanilla.settled, 100_000);
+    assert.equal(balance.freeColorableUtxos, 5);
+    const meta = await rgb.getAssetMetadata("rgb:a");
+    assert.equal(meta.schema, "nia");
+    assert.equal(meta.ticker, "A");
+    assert.equal(meta.precision, 2);
+    assert.equal(meta.issuedSupply, "40");
+    assert.equal(meta.media, null);
+    await assert.rejects(rgb.getAssetMetadata("rgb:nope"), (err) => {
+      assert.equal(providerErrorCode(err), "ASSET_NOT_FOUND");
+      return true;
+    });
+    assert.deepEqual(await rgb.refresh(), { refreshed: false });
+    assert.deepEqual(await rgb.refresh("rgb:a"), { refreshed: false });
+  });
+
+  it("signs only vanilla inputs it owns", async () => {
+    const rgb = createMockProvider();
+    await rgb.enable();
+    const psbt = mockPsbt({
+      inputs: [{ mine: true }, { mine: false }],
+      outputs: [{ address: "tb1qdest", amount: 1000 }],
+      fee: 200,
+    });
+    const signed = await rgb.signPsbt(psbt, { finalize: true });
+    assert.equal(signed.signedInputs, 1);
+    const decoded = JSON.parse(atob(signed.psbt));
+    assert.equal(decoded.finalized, true);
+    assert.equal(decoded.inputs[0].signed, true);
+
+    const refusing = createMockProvider({ rejectConfirmations: true });
+    await refusing.enable();
+    // UNSAFE_PSBT comes before the prompt, so a refusing user never sees it.
+    await assert.rejects(
+      refusing.signPsbt(mockPsbt({ inputs: [{ mine: true, colored: true }] })),
+      (err) => {
+        assert.equal(providerErrorCode(err), "UNSAFE_PSBT");
+        return true;
+      },
+    );
+    for (const bad of [mockPsbt({ inputs: [{ mine: false }] }), "not-base64-json"]) {
+      await assert.rejects(refusing.signPsbt(bad), (err) => {
+        assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+        return true;
+      });
+    }
+    await assert.rejects(refusing.signPsbt(psbt), (err) => {
+      assert.equal(providerErrorCode(err), "USER_REJECTED");
+      return true;
+    });
+  });
+
+  it("refuses the new methods when not enabled or not listed", async () => {
+    const rgb = createMockProvider({ methods: ["enable", "getInfo"] });
+    await assert.rejects(rgb.getBtcBalance(), (err) => {
+      assert.equal(providerErrorCode(err), "NOT_ENABLED");
+      return true;
+    });
+    await rgb.enable();
+    for (const attempt of [
+      () => rgb.getBtcBalance(),
+      () => rgb.refresh(),
+      () => rgb.getAssetMetadata("rgb:a"),
+      () => rgb.witnessReceive(),
+      () => rgb.createUtxos(),
+      () => rgb.cancelReceive("utxob:x"),
+      () => rgb.signPsbt(mockPsbt({ inputs: [{ mine: true }] })),
+    ]) {
+      await assert.rejects(attempt, (err) => {
+        assert.equal(providerErrorCode(err), "METHOD_NOT_SUPPORTED");
+        return true;
+      });
+    }
+  });
+
   it("installs on window and answers discovery", async () => {
     const win = useWindow();
     const { provider, info, uninstall } = installMockProvider({ protocol: "RGB_LN" });
@@ -522,7 +689,7 @@ describe("conformance", () => {
     const report = await runConformance(rgb);
     assert.equal(report.ok, true, formatReport(report));
     assert.equal(report.failed, 0);
-    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "skip");
+    assert.equal(report.checks.find((c) => c.name === "signMessage-available")?.status, "pass");
     assert.ok(report.passed >= 10, formatReport(report));
   });
 
@@ -619,6 +786,39 @@ describe("conformance", () => {
     for (const method of ["burnAsset", "getConsignment"]) {
       assert.equal(report.checks.find((c) => c.name === `${method}-available`)?.status, "fail");
     }
+  });
+
+  it("checks the 0.4 read-only methods only when listed", async () => {
+    const report = await runConformance(createMockProvider({ assets: [{ id: "rgb:a", balance: 1 }] }));
+    for (const name of ["getBtcBalance-shape", "getAssetMetadata-miss", "getAssetMetadata-shape", "refresh-shape"]) {
+      assert.equal(report.checks.find((c) => c.name === name)?.status, "pass", formatReport(report));
+    }
+
+    const older = await runConformance(
+      createMockProvider({
+        methods: ["enable", "getInfo", "getAddress", "listAssets", "getAssetBalance",
+          "listTransfers", "getTransferStatus", "on", "off"],
+      }),
+    );
+    assert.equal(older.checks.find((c) => c.name === "getBtcBalance-shape")?.status, "skip");
+    assert.equal(older.ok, true, formatReport(older));
+  });
+
+  it("catches a balance that leaks outpoints and a metadata miss with the wrong code", async () => {
+    const rgb = createMockProvider();
+    const leaky = Object.create(rgb);
+    leaky.getBtcBalance = async () => ({
+      vanilla: { settled: 1, future: 1, spendable: 1 },
+      colored: { settled: 0, future: 0, spendable: 0 },
+      freeColorableUtxos: 1,
+      free: [`${"ab".repeat(32)}:0`],
+    });
+    leaky.getAssetMetadata = async () => {
+      throw Object.assign(new Error("boom"), { code: "INTERNAL_ERROR" });
+    };
+    const report = await runConformance(leaky);
+    assert.equal(report.checks.find((c) => c.name === "getBtcBalance-shape")?.status, "fail");
+    assert.equal(report.checks.find((c) => c.name === "getAssetMetadata-miss")?.status, "fail");
   });
 
   it("catches a wallet that wraps its lists", async () => {

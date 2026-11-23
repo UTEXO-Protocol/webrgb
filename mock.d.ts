@@ -32,16 +32,12 @@ export interface MockProviderOptions {
   autoEnable?: boolean;
   /** Make every confirmation-gated call reject with `USER_REJECTED`. */
   rejectConfirmations?: boolean;
-  /** Optional test signer; runs after access, argument and confirmation checks. */
+  /** Test signer; runs after access, argument and confirmation checks. Default: a deterministic stand-in. */
   signMessage?: (message: string) => Promise<RgbSignMessageResult>;
   /** Test fixture only: the mock cannot validate native RGB consignments. */
   getReceivedMint?: (args: RgbGetReceivedMintArgs) => Promise<RgbReceivedMint | null>;
   /** Fixture only: the mock does not construct a real burn or validate bridge routes. */
   burnAsset?: (args: RgbBurnAssetArgs) => Promise<RgbBurnAssetResult>;
-  /** Initial mock-only empty colorable UTXOs. Default 5. */
-  freeColorableUtxos?: number;
-  /** Initial vanilla bitcoin in sats. Default 100000. */
-  vanillaSats?: number;
   /** Assets the wallet starts with. Balances default to 0. */
   assets?: Array<RgbAsset & { balance?: number }>;
   /** Delay every call by this many milliseconds, to shake out missing awaits. */
@@ -51,6 +47,26 @@ export interface MockProviderOptions {
    * raised to it. Default `1`. The KaleidoSwap extension uses `3`.
    */
   minConfirmationsFloor?: number;
+  /**
+   * Free colorable UTXOs the wallet starts with. Default `5`; each blinded
+   * receive reserves one, and at `0` `blindReceive` rejects with
+   * `NO_AVAILABLE_UTXOS` until `createUtxos` adds more.
+   */
+  freeColorableUtxos?: number;
+  /** Uncolored sats `createUtxos` spends from. Default `100000`. */
+  vanillaSats?: number;
+}
+
+/**
+ * The mock's stand-in for a PSBT — it cannot sign Bitcoin. `signPsbt` takes
+ * {@link mockPsbt}'s output and rejects with `UNSAFE_PSBT` when an input it
+ * owns is `colored`.
+ */
+export interface MockPsbt {
+  inputs: Array<{ mine: boolean; colored?: boolean; signed?: boolean }>;
+  outputs?: Array<{ address: string; amount: number }>;
+  fee?: number;
+  finalized?: boolean;
 }
 
 export interface MockCall {
@@ -68,6 +84,9 @@ export interface MockRgbProvider extends RgbProvider {
   /** Back to a fresh, un-enabled provider; keeps the assets and options. */
   reset(): void;
 }
+
+/** Encode a {@link MockPsbt} as the base64 string the mock's `signPsbt` reads. */
+export declare function mockPsbt(spec: MockPsbt): string;
 
 export declare function createMockProvider(options?: MockProviderOptions): MockRgbProvider;
 

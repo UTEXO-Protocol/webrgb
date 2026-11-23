@@ -163,6 +163,8 @@
               <button data-call="listAssets">listAssets()</button>
               <input class="field" id="asset" placeholder="rgb:… (auto-filled from listAssets)" />
               <button class="ghost" data-call="getAssetBalance">getAssetBalance()</button>
+              <button class="ghost" data-call="getAssetMetadata">getAssetMetadata()</button>
+              <button class="ghost" data-call="refresh">refresh()</button>
             </div>
             <div>
               <label>issueAsset — NIA only; needs a funded getAddress() UTXO</label>
@@ -184,6 +186,14 @@
               <div class="row">
                 <input class="field" id="recv_amt" type="number" placeholder="1" style="max-width: 110px" />
                 <button data-call="blindReceive">blindReceive()</button>
+                <button data-call="witnessReceive">witnessReceive()</button>
+              </div>
+            </div>
+            <div>
+              <label>cancelReceive — recipient id of a pending receive (auto-filled)</label>
+              <div class="row">
+                <input class="field" id="recipient_id" placeholder="utxob:… or wvout:…" />
+                <button class="ghost" data-call="cancelReceive">cancelReceive()</button>
               </div>
             </div>
             <div>
@@ -205,6 +215,38 @@
             <div class="row">
               <button data-call="subscribe">on(transferReceived, transferSettled)</button>
               <button class="ghost" data-call="unsubscribe">off()</button>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Bitcoin &amp; UTXOs</h2>
+          <p class="note">
+            <code>blindReceive()</code> needs a free colorable UTXO and rejects with
+            <code>NO_AVAILABLE_UTXOS</code> without one. <code>signPsbt()</code> signs bitcoin-only
+            inputs; a wallet refuses one that holds RGB assets with <code>UNSAFE_PSBT</code>. The mock
+            cannot sign Bitcoin and reads only PSBTs built with <code>mockPsbt()</code>.
+          </p>
+          <div class="stack">
+            <div class="row">
+              <button class="ghost" data-call="getBtcBalance">getBtcBalance()</button>
+            </div>
+            <div>
+              <label>createUtxos — count · sats each · sat/vB (blank = wallet default)</label>
+              <div class="row">
+                <input class="field" id="utxo_num" type="number" placeholder="3" style="max-width: 90px" />
+                <input class="field" id="utxo_size" type="number" placeholder="3000" style="max-width: 110px" />
+                <input class="field" id="utxo_fee" type="number" placeholder="fee" style="max-width: 90px" />
+                <button data-call="createUtxos">createUtxos()</button>
+              </div>
+            </div>
+            <div>
+              <label>signPsbt — base64 PSBT</label>
+              <div class="row">
+                <input class="field" id="psbt" placeholder="cHNidP8B…" />
+                <button class="ghost" data-call="mockPsbt">mock PSBT</button>
+                <button data-call="signPsbt">signPsbt()</button>
+              </div>
             </div>
           </div>
         </section>
@@ -243,7 +285,7 @@
 
     <script type="module">
       import { listProviders, requestProvider, toAssetArray } from "./index.js";
-      import { installMockProvider } from "./mock.js";
+      import { installMockProvider, mockPsbt } from "./mock.js";
       import { formatReport, runConformance } from "./conformance.js";
 
       const $ = (id) => document.getElementById(id);
@@ -363,11 +405,44 @@
           );
           if (r?.assetId) $("asset").value = r.assetId;
         },
-        blindReceive: () =>
-          run("blindReceive()", async () =>
+        blindReceive: async () => {
+          const r = await run("blindReceive()", async () =>
             // An empty asset field asks for an invoice that accepts any asset.
             (await provider()).blindReceive({ assetId: str("asset") || undefined, amount: num("recv_amt") }),
+          );
+          if (r?.recipientId) $("recipient_id").value = r.recipientId;
+        },
+        witnessReceive: async () => {
+          const r = await run("witnessReceive()", async () =>
+            (await provider()).witnessReceive({ assetId: str("asset") || undefined, amount: num("recv_amt") }),
+          );
+          if (r?.recipientId) $("recipient_id").value = r.recipientId;
+        },
+        cancelReceive: () =>
+          run("cancelReceive()", async () => (await provider()).cancelReceive(str("recipient_id"))),
+        getBtcBalance: () => run("getBtcBalance()", async () => (await provider()).getBtcBalance()),
+        createUtxos: () =>
+          run("createUtxos()", async () =>
+            (await provider()).createUtxos({
+              num: num("utxo_num"),
+              size: num("utxo_size"),
+              feeRate: num("utxo_fee"),
+            }),
           ),
+        mockPsbt: () =>
+          run("mockPsbt()", async () => {
+            $("psbt").value = mockPsbt({
+              inputs: [{ mine: true }],
+              outputs: [{ address: "tb1qmockdestination", amount: 1000 }],
+              fee: 200,
+            });
+            return "filled; only the mock wallet accepts it";
+          }),
+        signPsbt: () => run("signPsbt()", async () => (await provider()).signPsbt(str("psbt"))),
+        getAssetMetadata: () =>
+          run("getAssetMetadata()", async () => (await provider()).getAssetMetadata(str("asset"))),
+        refresh: () =>
+          run("refresh()", async () => (await provider()).refresh(str("asset") || undefined)),
         sendInvoice: () =>
           run("sendAsset({ invoice })", async () =>
             (await provider()).sendAsset({ invoice: str("invoice") }),
