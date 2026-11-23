@@ -155,7 +155,8 @@ per-method consent rules in SPEC §3.
 
 For burn, validate the destination and compute its commitment before signing.
 Pass the asset ID, exact amount, commitment as `burn_reason` (64 lowercase hex
-characters without `0x`), fee rate and confirmation count to rgb-lib.
+characters without `0x`), fee rate, rounded up to whole sat/vB, and confirmation
+count to rgb-lib.
 
 For `getReceivedMint`, bind the full invoice to the active wallet before a
 native recipient-only lookup. Return `assetId` from the consignment validated
@@ -194,7 +195,7 @@ invoices with `INVALID_PARAMS`.
 
 | WebRGB method | rgb-lib mapping |
 | --- | --- |
-| `createUtxos` | `create_utxos` with `up_to = false`; obtain consent and return the actual count, size and optional fee rate. |
+| `createUtxos` | `create_utxos` with `up_to = false`; rgb-lib takes whole sat/vB, so round a fractional `feeRate` up. Obtain consent and return the actual count, size and the fee rate used. |
 | `getBtcBalance` | `get_btc_balance`; count empty, unreserved colorable UTXOs separately or return null. Zero does not exclude free allocation slots on occupied outputs. Never expose outpoints. |
 | `refresh` | `refresh`; derive `refreshed` from `updated_status` and reject on any in-scope per-transfer `failure`, even if the native call succeeds. |
 | `getAssetMetadata` | `get_asset_metadata`; map `initial_supply` directly to the exact decimal `issuedSupply`, without conversion through a JavaScript number. Return public media metadata, never local paths. |

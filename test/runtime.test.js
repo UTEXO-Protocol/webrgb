@@ -518,10 +518,12 @@ describe("mock provider", () => {
 
     const refusing = createMockProvider({ rejectConfirmations: true });
     await refusing.enable();
-    await assert.rejects(refusing.signMessage("\ud800"), (err) => {
-      assert.equal(providerErrorCode(err), "INVALID_PARAMS");
-      return true;
-    });
+    for (const message of ["", "\ud800"]) {
+      await assert.rejects(refusing.signMessage(message), (err) => {
+        assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+        return true;
+      });
+    }
     await assert.rejects(refusing.signMessage("hi"), (err) => {
       assert.equal(providerErrorCode(err), "USER_REJECTED");
       return true;
@@ -642,7 +644,7 @@ describe("message signing", () => {
     await rgb.enable();
     assert.deepEqual(seen, []);
     assert.equal(supports(await rgb.getInfo(), "signMessage"), true);
-    const messages = ["  Test message e\u0301\r\n", ""];
+    const messages = ["  Test message e\u0301\r\n", " "];
     for (const message of messages) assert.deepEqual(await rgb.signMessage(message), result);
     assert.deepEqual(seen, messages);
   });
@@ -653,7 +655,7 @@ describe("message signing", () => {
       signMessage: async () => { throw new Error("signer must not run"); },
     });
     await rgb.enable();
-    for (const message of [undefined, null, 1, "\ud800"]) {
+    for (const message of [undefined, null, 1, "", "\ud800"]) {
       await assert.rejects(rgb.signMessage(message), { code: "INVALID_PARAMS" });
     }
     await assert.rejects(rgb.signMessage("hello"), { code: "USER_REJECTED" });

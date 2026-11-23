@@ -21,12 +21,23 @@ describe("selected upstream wallet methods", () => {
     assert.ok(after.vanilla.spendable < before.vanilla.spendable);
   });
 
+  it("accepts a fractional fee rate and charges whole sats", async () => {
+    const wallet = createMockProvider();
+    await wallet.enable();
+    const before = (await wallet.getBtcBalance()).vanilla.spendable;
+    assert.deepEqual(await wallet.createUtxos({ num: 1, size: 3000, feeRate: 1.5 }), {
+      created: 1, size: 3000, feeRate: 1.5,
+    });
+    const spent = before - (await wallet.getBtcBalance()).vanilla.spendable;
+    assert.equal(spent, 3000 + Math.ceil(1.5 * (110 + 43)));
+  });
+
   it("rejects native bounds before prompting and does not spend when consent is declined", async () => {
     const wallet = createMockProvider({ rejectConfirmations: true });
     await wallet.enable();
     const before = await wallet.getBtcBalance();
     for (const args of [{ num: 0 }, { num: 256 }, { size: 2 ** 32 }, { size: 0 },
-      { feeRate: Infinity }, { feeRate: 0.5 }, { feeRate: 0 }]) {
+      { feeRate: Infinity }, { feeRate: NaN }, { feeRate: "2" }, { feeRate: 0 }, { feeRate: -0.5 }]) {
       await assert.rejects(wallet.createUtxos(args), { code: "INVALID_PARAMS" });
     }
     await assert.rejects(wallet.createUtxos(), { code: "USER_REJECTED" });
@@ -88,6 +99,18 @@ describe("selected upstream wallet methods", () => {
     const report = await runConformance(unlisted);
     assert.equal(report.checks.find(({ name }) => name === "createUtxos-available").status, "fail");
     assert.equal(report.checks.find(({ name }) => name === "getBtcBalance-available").status, "fail");
+  });
+
+  it("fails a provider that lacks any declared method", async () => {
+    const passing = await runConformance(createMockProvider());
+    assert.equal(passing.checks.find(({ name }) => name === "methods-present").status, "pass");
+    for (const method of ["blindReceive", "issueAsset", "sendAsset", "decodeRgbInvoice", "makeLnInvoice", "off"]) {
+      const wallet = createMockProvider();
+      delete wallet[method];
+      const check = (await runConformance(wallet)).checks.find(({ name }) => name === "methods-present");
+      assert.equal(check.status, "fail", method);
+      assert.match(check.detail, new RegExp(`lacks ${method};`));
+    }
   });
 
   it("detects advertised-but-missing methods and a failed native refresh", async () => {
