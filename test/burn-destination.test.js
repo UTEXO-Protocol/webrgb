@@ -87,8 +87,9 @@ describe("single burn destination contract", () => {
   it("does not advertise or construct burns without a fixture, and conformance never calls it", async () => {
     const plain = createMockProvider();
     await plain.enable();
-    assert.equal(plain.burnAsset, undefined);
+    assert.equal(typeof plain.burnAsset, "function");
     assert.equal((await plain.getInfo()).methods.includes("burnAsset"), false);
+    await assert.rejects(plain.burnAsset({}), { code: "METHOD_NOT_SUPPORTED" });
     const fixture = createMockProvider({ burnAsset: async () => { throw new Error("must not burn"); } });
     assert.equal((await runConformance(fixture)).ok, true);
     assert.equal(fixture.calls.some(({ method }) => method === "burnAsset"), false);

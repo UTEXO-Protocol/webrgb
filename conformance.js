@@ -135,12 +135,31 @@ export async function runConformance(provider, options = {}) {
     assert(typeof provider.witnessReceive === "function", "witnessReceive is missing");
   });
 
-  // An optional method may be absent. Inspect advertised functions without
-  // invoking them: these methods require consent or can disclose wallet data.
+  // Every method is present whether or not the wallet serves it; `methods` is
+  // the feature-detection contract. An unlisted method is probed only when the
+  // call cannot prompt, spend or disclose wallet data.
+  /** @type {Partial<Record<import("./index.js").RgbMethod, () => Promise<unknown>>>} */
+  const safeProbes = {
+    getReceivedMint: () => provider.getReceivedMint({ invoice: "rgb:webrgb-conformance-no-such-invoice" }),
+    getBtcBalance: () => provider.getBtcBalance(),
+    refresh: () => provider.refresh("rgb:webrgb-conformance-no-such-asset"),
+    getAssetMetadata: () => provider.getAssetMetadata("rgb:webrgb-conformance-no-such-asset"),
+  };
   for (const method of /** @type {const} */ (["burnAsset", "getConsignment", "signMessage", "getReceivedMint", "createUtxos", "getBtcBalance", "refresh", "getAssetMetadata"])) {
-    await check(`${method}-available`, () => {
-      if (!info || !supports(info, method)) return `the wallet does not serve ${method}`;
-      assert(typeof provider[method] === "function", `${method} is advertised but missing`);
+    await check(`${method}-available`, async () => {
+      assert(typeof provider[method] === "function", `${method} is missing; unserved methods must reject instead`);
+      if (!info) return "getInfo() did not return";
+      if (supports(info, method)) return;
+      const probe = safeProbes[method];
+      if (!probe) return `the wallet does not serve ${method}; not called, since it prompts, spends or shares data`;
+      try {
+        await probe();
+      } catch (err) {
+        const code = providerErrorCode(err);
+        assert(code === "METHOD_NOT_SUPPORTED", `unlisted ${method} rejected with ${code}, not METHOD_NOT_SUPPORTED`);
+        return;
+      }
+      throw new Error(`${method} is absent from methods but was served anyway`);
     });
   }
 
@@ -245,7 +264,6 @@ export async function runConformance(provider, options = {}) {
 
   await check("getBtcBalance-shape", async () => {
     if (!info || !supports(info, "getBtcBalance")) return "the wallet does not serve getBtcBalance";
-    assert(typeof provider.getBtcBalance === "function", "getBtcBalance is missing");
     const balance = await provider.getBtcBalance();
     for (const side of /** @type {const} */ (["vanilla", "colored"])) {
       for (const field of /** @type {const} */ (["settled", "future", "spendable"])) {
@@ -262,7 +280,6 @@ export async function runConformance(provider, options = {}) {
 
   await check("getAssetMetadata-miss", async () => {
     if (!info || !supports(info, "getAssetMetadata")) return "the wallet does not serve getAssetMetadata";
-    assert(typeof provider.getAssetMetadata === "function", "getAssetMetadata is missing");
     try {
       await provider.getAssetMetadata("rgb:webrgb-conformance-no-such-asset");
     } catch (error) {
@@ -275,7 +292,6 @@ export async function runConformance(provider, options = {}) {
   await check("getAssetMetadata-shape", async () => {
     if (!info || !supports(info, "getAssetMetadata")) return "the wallet does not serve getAssetMetadata";
     if (!assetId) return "the wallet holds no asset and none was passed";
-    assert(typeof provider.getAssetMetadata === "function", "getAssetMetadata is missing");
     const meta = await provider.getAssetMetadata(assetId);
     assert(meta?.assetId === assetId, "metadata assetId does not match");
     assert(typeof meta.schema === "string", "schema is not a string");
@@ -292,7 +308,6 @@ export async function runConformance(provider, options = {}) {
 
   await check("refresh-shape", async () => {
     if (!info || !supports(info, "refresh")) return "the wallet does not serve refresh";
-    assert(typeof provider.refresh === "function", "refresh is missing");
     const refreshed = await provider.refresh();
     assert(typeof refreshed?.refreshed === "boolean", "refresh did not return a boolean result");
   });

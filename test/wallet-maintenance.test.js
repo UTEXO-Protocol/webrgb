@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createMockProvider } from "../mock.js";
-import { runConformance } from "../conformance.js";
+import { formatReport, runConformance } from "../conformance.js";
 
 describe("selected upstream wallet methods", () => {
   it("gates UTXO spending, then makes a previously unavailable blinded receive possible", async () => {
@@ -62,19 +62,32 @@ describe("selected upstream wallet methods", () => {
     await assert.rejects(wallet.refresh("rgb:absent"), { code: "ASSET_NOT_FOUND" });
   });
 
-  it("does not call spending methods during conformance and tolerates absent optional APIs", async () => {
+  it("does not call spending methods during conformance and probes only safe unlisted reads", async () => {
     const wallet = createMockProvider();
     assert.equal((await runConformance(wallet)).ok, true);
     assert.equal(wallet.calls.some(({ method }) => method === "createUtxos"), false);
     const info = await wallet.getInfo();
     const added = ["createUtxos", "getBtcBalance", "refresh", "getAssetMetadata"];
-    const legacy = createMockProvider({ methods: info.methods.filter((method) => !added.includes(method)) });
-    for (const method of added) delete legacy[method];
-    const report = await runConformance(legacy);
-    assert.equal(report.ok, true);
-    for (const method of added) {
-      assert.equal(report.checks.find(({ name }) => name === `${method}-available`).status, "skip");
+    const unlisted = createMockProvider({ methods: info.methods.filter((method) => !added.includes(method)) });
+    const report = await runConformance(unlisted);
+    assert.equal(report.ok, true, formatReport(report));
+    assert.equal(unlisted.calls.some(({ method }) => method === "createUtxos"), false);
+    assert.equal(report.checks.find(({ name }) => name === "createUtxos-available").status, "skip");
+    for (const method of ["getBtcBalance", "refresh", "getAssetMetadata"]) {
+      assert.equal(report.checks.find(({ name }) => name === `${method}-available`).status, "pass");
     }
+  });
+
+  it("fails an unlisted method that is missing or served anyway", async () => {
+    const wallet = createMockProvider();
+    await wallet.enable();
+    const info = await wallet.getInfo();
+    const unlisted = createMockProvider({ methods: info.methods.filter((method) => method !== "getBtcBalance" && method !== "createUtxos") });
+    delete unlisted.createUtxos;
+    unlisted.getBtcBalance = async () => ({ vanilla: { settled: 0, future: 0, spendable: 0 }, colored: { settled: 0, future: 0, spendable: 0 }, freeColorableUtxos: 0 });
+    const report = await runConformance(unlisted);
+    assert.equal(report.checks.find(({ name }) => name === "createUtxos-available").status, "fail");
+    assert.equal(report.checks.find(({ name }) => name === "getBtcBalance-available").status, "fail");
   });
 
   it("detects advertised-but-missing methods and a failed native refresh", async () => {
