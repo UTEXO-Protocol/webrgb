@@ -20,6 +20,7 @@ export type ProviderErrorCode =
   | "INVALID_PARAMS"
   | "ASSET_NOT_FOUND"
   | "NO_AVAILABLE_UTXOS"
+  | "UNSAFE_PSBT"
   | "INTERNAL_ERROR";
 
 /** Every code, in the order the README documents them. */
@@ -73,6 +74,8 @@ export type RgbMethod =
   | "getBtcBalance"
   | "refresh"
   | "getAssetMetadata"
+  | "cancelReceive"
+  | "signPsbt"
   | "issueAsset"
   | "listAssets"
   | "getAssetBalance"
@@ -164,6 +167,7 @@ export interface RgbBtcBalanceSide {
   spendable: number;
 }
 
+/** Aggregate figures only: a wallet never exposes outpoints through it. */
 export interface RgbBtcBalance {
   vanilla: RgbBtcBalanceSide;
   colored: RgbBtcBalanceSide;
@@ -224,6 +228,17 @@ export interface RgbReceivedMint {
   evmChainId: string;
   /** Lowercase 0x-prefixed 20-byte lock contract address. */
   bridgeContract: string;
+}
+
+export interface RgbSignPsbtOptions {
+  /** Return a finalized PSBT. */
+  finalize?: boolean;
+}
+
+export interface RgbSignPsbtResult {
+  /** Base64. */
+  psbt: string;
+  signedInputs: number;
 }
 
 export interface RgbIssueAssetArgs {
@@ -446,18 +461,38 @@ export interface RgbProvider {
   getInfo(): Promise<RgbInfo>;
   /** Bitcoin address of the RGB wallet, used to anchor RGB state. */
   getAddress(): Promise<{ address: string }>;
-  /** Asks the user to sign the unchanged message. */
+  /** Asks the user to sign the unchanged message, in the LND `signmessage` format. Prompts. */
   signMessage(message: string): Promise<RgbSignMessageResult>;
+  /**
+   * Rejects with `NO_AVAILABLE_UTXOS` when the wallet cannot allocate a
+   * receiving slot; offer {@link RgbProvider.createUtxos} or
+   * {@link RgbProvider.witnessReceive} then.
+   */
   blindReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
+  /**
+   * A witness invoice: the sender funds a new UTXO, so it works on an empty
+   * wallet. Same arguments and result as `blindReceive`.
+   */
   witnessReceive(args?: RgbWitnessReceiveArgs): Promise<RgbWitnessReceiveResult>;
   /** Spends bitcoin to create colorable UTXOs, with user confirmation. */
   createUtxos(args?: RgbCreateUtxosArgs): Promise<RgbCreateUtxosResult>;
+  /**
+   * Fail a pending receive this wallet created, releasing the UTXO it
+   * reserved. `cancelled: false` when it is unknown or no longer pending.
+   */
+  cancelReceive(recipientId: string): Promise<{ cancelled: boolean }>;
   /** Aggregate read, without revealing UTXO identities. */
   getBtcBalance(): Promise<RgbBtcBalance>;
   /** Advances transfers without a prompt. Native refresh failures reject. */
   refresh(assetId?: string): Promise<{ refreshed: boolean }>;
-  /** Contract metadata, with exact initial supply. */
+  /** Contract metadata, with exact initial supply. An unknown asset rejects with `ASSET_NOT_FOUND`. */
   getAssetMetadata(assetId: string): Promise<RgbAssetMetadata>;
+  /**
+   * Sign the inputs this wallet controls in a base64 PSBT. Rejects with
+   * `UNSAFE_PSBT`, before prompting, when any of them holds an RGB
+   * allocation: signing it outside a state transition destroys the assets.
+   */
+  signPsbt(psbt: string, opts?: RgbSignPsbtOptions): Promise<RgbSignPsbtResult>;
 
   issueAsset(args: RgbIssueAssetArgs): Promise<RgbIssueAssetResult>;
   listAssets(): Promise<RgbAssetList>;

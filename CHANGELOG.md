@@ -6,6 +6,16 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Sync with upstream `@kaleidorg/webrgb` 0.5.0: `cancelReceive(recipientId)`,
+  `signPsbt(psbt, opts?)`, error code `UNSAFE_PSBT`, `mockPsbt()`, transport
+  adapters in SPEC.md §1, and a deterministic default signer in the mock.
+  Where both sides defined a method, this fork keeps its stricter contract:
+  `issuedSupply` stays an exact u64 decimal string, `freeColorableUtxos: 0`
+  does not imply `NO_AVAILABLE_UTXOS`, and `signMessage` accepts an empty
+  message.
+
 ### Breaking
 
 - Make every `RgbProvider` method required in the types: `signMessage`,
@@ -80,6 +90,50 @@ project adheres to [Semantic Versioning](https://semver.org/).
   WalletConnect is maintained in the separate `@utexo/webrgb-walletconnect` project.
 
 The entries below describe upstream `@kaleidorg/webrgb` releases.
+## [0.5.0] - 2026-10-15
+
+### Added
+
+- `signMessage(message)`: sign a string in the LND `signmessage` format
+  (zbase32, public key recoverable), so a dApp backend can authenticate the
+  wallet with a challenge. Prompts with the message and the origin. The mock
+  returns a deterministic stand-in signature.
+- SPEC.md §1 describes transport adapters: a wallet outside the page, such as
+  a mobile app, MAY serve the same interface through a library that relays
+  calls over a paired session instead of injecting `window.rgb`.
+
+## [0.4.0] - 2026-10-08
+
+### Added
+
+- `witnessReceive(args?)`: a witness invoice the sender funds, so a wallet with
+  no colorable UTXO can still receive. Same arguments and result as
+  `blindReceive`.
+- `createUtxos({ num?, size?, feeRate? })`: spend on-chain bitcoin to create
+  colorable UTXOs. Prompts.
+- `cancelReceive(recipientId)`: fail a pending receive and release the UTXO it
+  reserved. Prompts.
+- `getBtcBalance()`: vanilla and colored bitcoin, plus `freeColorableUtxos`.
+  Aggregate figures only, never outpoints.
+- `refresh(assetId?)`: sync and advance pending transfers.
+- `getAssetMetadata(assetId)`: the asset's contract data.
+- `signPsbt(psbt, { finalize? })`: sign the wallet's vanilla inputs in a
+  base64 PSBT. SPEC.md requires a wallet to refuse, before prompting, a PSBT
+  in which an input it would sign holds RGB assets.
+- Error codes `NO_AVAILABLE_UTXOS` (no free colorable UTXO for a blinded
+  receive or a send) and `UNSAFE_PSBT`.
+- The mock models colorable UTXOs and bitcoin (`freeColorableUtxos`,
+  `vanillaSats`) and serves every new method. It cannot sign Bitcoin:
+  `signPsbt` reads PSBTs built with the new `mockPsbt()` helper.
+- Conformance checks `getBtcBalance-shape`, `getAssetMetadata-miss`,
+  `getAssetMetadata-shape` and `refresh-shape`, run only when `methods` lists
+  the method.
+- The playground has controls for every new method.
+
+### Changed
+
+- `ProviderErrorCode` has two more members, so a total `switch` needs cases
+  for them. Wallets older than this version never send them.
 
 ## [0.3.0] - 2026-09-26
 
