@@ -54,22 +54,26 @@ try {
 |--------|---------|
 | `enable()` / `getInfo()` | Connect the origin; learn network, runtime and served methods |
 | `getAddress()` | Bitcoin address that anchors the wallet's RGB state |
-| `signMessage(message)` | Sign a message with user approval (optional) |
+| `signMessage(message)` | Sign a message with user approval |
 | `blindReceive(args?)` | Blinded-UTXO receive invoice; omit `assetId` for any asset, including one the wallet has never held |
 | `witnessReceive(args?)` | Receive invoice for an output created by the sender's transaction |
-| `createUtxos(args?)` | Optional, consented creation of colorable UTXOs |
-| `getBtcBalance()` | Optional aggregate bitcoin balances; no outpoint disclosure |
-| `refresh(assetId?)` | Optional transfer refresh; backend failures reject |
-| `getAssetMetadata(assetId)` | Optional contract metadata with exact string-valued initial supply |
+| `createUtxos(args?)` | Consented creation of colorable UTXOs |
+| `getBtcBalance()` | Aggregate bitcoin balances; no outpoint disclosure |
+| `refresh(assetId?)` | Transfer refresh; backend failures reject |
+| `getAssetMetadata(assetId)` | Contract metadata with exact string-valued initial supply |
 | `issueAsset(args)` | Mint a new asset (gated by its own wallet capability) |
 | `listAssets()` / `getAssetBalance(id)` | Holdings |
 | `sendAsset(args)` | Send against an RGB invoice, or explicitly |
-| `burnAsset(args)` / `getConsignment(args)` | Optional BFA extensions: asset burns and consignment sharing for third-party proof verification |
-| `getReceivedMint({ invoice })` | Optional owned-invoice validation before a bridge deposit; returns a validated commitment or `null` while pending |
+| `burnAsset(args)` / `getConsignment(args)` | BFA extensions: asset burns and consignment sharing for third-party proof verification |
+| `getReceivedMint({ invoice })` | Owned-invoice validation before a bridge deposit; returns a validated commitment or `null` while pending |
 | `listTransfers(id?)` / `getTransferStatus(id)` | Transfer history and status |
 | `decodeRgbInvoice(invoice)` | What an invoice asks for, before you pay it — read-only, no prompt |
 | `makeLnInvoice(args)` / `payLnInvoice(args)` | RGB over Lightning; listed in `methods` only when the wallet has a Lightning node |
 | `on` / `off` | `transferReceived` and `transferSettled` events |
+
+Every method is always present on the provider. Not every wallet serves every
+method: check `supports(await rgb.getInfo(), method)` first. A method the
+wallet does not list rejects with `METHOD_NOT_SUPPORTED`.
 
 Feature-detect with `supports(info, method)` rather than assuming a method exists: a node-less wallet rejects the Lightning methods with `METHOD_NOT_SUPPORTED`.
 

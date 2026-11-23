@@ -2,9 +2,9 @@
 
 **Status:** draft, WebRGB 0.1.7 contract. The base interface follows the KaleidoSwap
 browser extension ≥ 0.3.0 and is described by `index.d.ts` in this repository.
-The `burnAsset`, `getConsignment` and `getReceivedMint` methods are optional
-BFA extensions provided by this fork.
-`signMessage` is also an optional extension provided by this fork.
+The `burnAsset`, `getConsignment` and `getReceivedMint` methods are BFA
+extensions provided by this fork. `signMessage` is also an extension provided
+by this fork. A wallet need not serve them; see `methods` in §3.
 `witnessReceive` is a standard provider method added by this fork.
 
 A **wallet** injects a provider into a web page. A **dApp** calls it to issue,
@@ -102,9 +102,10 @@ around them.
   methods the wallet will serve. A method absent from it MUST reject with
   `METHOD_NOT_SUPPORTED`; a method present in it MUST NOT. `makeLnInvoice` and
   `payLnInvoice` MUST appear only when `protocol` is `"RGB_LN"`, and
-  `issueAsset` only when the runtime can mint. `burnAsset`, `getConsignment`,
-  `getReceivedMint` and `signMessage` are optional and MAY be absent when unsupported;
-  dApps MUST check both the method list and their presence.
+  `issueAsset` only when the runtime can mint. Every method in `index.d.ts`
+  MUST be present on the provider as a function, whether or not it is served:
+  presence is not feature detection. dApps MUST check `methods` and MUST NOT
+  rely on a method being absent.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
 - **`signMessage(message)`** signs a string and returns `{ signature }` as
@@ -127,7 +128,7 @@ around them.
 - **`witnessReceive(args?)`** returns an RGB invoice for an output created
   by the sender's transaction, without requiring an existing receiver UTXO.
   Its parameters, result and confirmation rules are the same as `blindReceive`.
-- **`createUtxos({ num?, size?, feeRate? })`** optionally creates colorable
+- **`createUtxos({ num?, size?, feeRate? })`** creates colorable
   UTXOs using the wallet's bitcoin. `num` is 1..255, `size` is a positive u32
   in sats, and `feeRate` is a positive safe integer in sat/vB. Wallet defaults
   apply when omitted. The wallet MUST validate backend limits and show the
@@ -135,17 +136,17 @@ around them.
   size and, when available, fee rate; fewer outputs may be created than requested. Invalid
   parameters reject with `INVALID_PARAMS`; insufficient BTC uses
   `INTERNAL_ERROR`. Never retry this spending operation automatically.
-- **`getBtcBalance()`** optionally returns aggregate `vanilla` and `colored`
+- **`getBtcBalance()`** returns aggregate `vanilla` and `colored`
   balances (settled, future and spendable sats) as nonnegative safe integers,
   plus `freeColorableUtxos` or `null` when its exact count is unavailable.
   It MUST NOT expose outpoints. Zero empty UTXOs does not imply a receive
   cannot use a free allocation slot on an occupied output.
-- **`refresh(assetId?)`** optionally syncs and advances transfers without a
+- **`refresh(assetId?)`** syncs and advances transfers without a
   confirmation prompt. Return `{ refreshed }`, true when a transfer changed
   state. A successful backend unable to report changes may return false.
   Wallets MUST inspect per-transfer native failures as well as thrown errors;
   failures within the requested scope MUST reject using §6, not return false.
-- **`getAssetMetadata(assetId)`** optionally returns the typed contract metadata.
+- **`getAssetMetadata(assetId)`** returns the typed contract metadata.
   `issuedSupply` is the initial supply as a canonical unsigned u64 decimal
   string, including zero. It is not the current wallet balance or circulating
   supply. Schema names include `bfa`. `ticker`, `details`, and `media` are null
@@ -340,8 +341,11 @@ console.log(formatReport(await runConformance(window.rgb)));
 ```
 
 It never issues, sends or creates an invoice, so it raises no confirmation and
-costs nothing to run against a funded wallet. It checks advertised optional
-methods without burning assets, sharing a consignment or signing a message.
+costs nothing to run against a funded wallet. It checks that every method is
+present without burning assets, sharing a consignment or signing a message.
+An unlisted method is called only when the call is a read that cannot prompt
+(`getBtcBalance`, `refresh`, `getAssetMetadata`, `getReceivedMint`), and must
+reject with `METHOD_NOT_SUPPORTED`.
 
 ## 8. Changes
 

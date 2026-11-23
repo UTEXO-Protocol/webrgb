@@ -87,8 +87,7 @@ async function useRgb(): Promise<void> {
 
 async function useBurn(provider: RgbProvider): Promise<void> {
   const info = await provider.getInfo();
-  if (!supports(info, "burnAsset") || !supports(info, "getConsignment") ||
-      !provider.burnAsset || !provider.getConsignment) return;
+  if (!supports(info, "burnAsset") || !supports(info, "getConsignment")) return;
 
   const args: RgbBurnAssetArgs = {
     network: info.network,
@@ -151,9 +150,8 @@ async function useBurn(provider: RgbProvider): Promise<void> {
 }
 
 async function useSignMessage(provider: RgbProvider): Promise<void> {
-  // @ts-expect-error optional signing needs a presence check
-  await provider.signMessage("test message");
-  if (!supports(await provider.getInfo(), "signMessage") || !provider.signMessage) return;
+  // Always callable; getInfo().methods says whether the wallet serves it.
+  if (!supports(await provider.getInfo(), "signMessage")) return;
   const signed: RgbSignMessageResult = await provider.signMessage("test message");
   signed.signature.toUpperCase();
   createMockProvider({ signMessage: async () => signed });
@@ -163,17 +161,15 @@ function useLegacyProvider(
   legacy: Omit<RgbProvider, "burnAsset" | "getConsignment" | "signMessage" | "getReceivedMint" | "createUtxos" | "getBtcBalance" | "refresh" | "getAssetMetadata">,
   args: RgbBurnAssetArgs,
 ): void {
-  // Adding the extension must not require an existing wallet to implement it.
-  const compatible: RgbProvider = legacy;
-  // @ts-expect-error optional methods need a presence check
-  compatible.burnAsset(args);
+  // Every method is required, so a wallet must at least stub it to reject.
+  // @ts-expect-error a provider missing methods is not an RgbProvider
+  const incomplete: RgbProvider = legacy;
+  void [incomplete, args];
 }
 
 async function inspectPreparedMint(provider: RgbProvider, invoice: string): Promise<void> {
-  // @ts-expect-error optional validation needs feature detection
-  await provider.getReceivedMint({ invoice });
   const info = await provider.getInfo();
-  if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) return;
+  if (!supports(info, "getReceivedMint")) return;
   const received: RgbReceivedMint | null = await provider.getReceivedMint({ invoice });
   if (received === null) return;
   BigInt(received.amount);
@@ -302,20 +298,18 @@ void RGB_ERROR_CODES;
 
 async function useWalletMaintenance(provider: RgbProvider): Promise<void> {
   const info = await provider.getInfo();
-  // @ts-expect-error new optional methods require feature detection
-  await provider.createUtxos();
-  if (supports(info, "createUtxos") && provider.createUtxos) {
+  if (supports(info, "createUtxos")) {
     const created = await provider.createUtxos({ num: 3, size: 3000, feeRate: 2 });
     created.created.toFixed();
   }
-  if (supports(info, "getBtcBalance") && provider.getBtcBalance) {
+  if (supports(info, "getBtcBalance")) {
     (await provider.getBtcBalance()).freeColorableUtxos?.toFixed();
   }
-  if (supports(info, "refresh") && provider.refresh) {
+  if (supports(info, "refresh")) {
     const changed: boolean = (await provider.refresh("rgb:x")).refreshed;
     void changed;
   }
-  if (supports(info, "getAssetMetadata") && provider.getAssetMetadata) {
+  if (supports(info, "getAssetMetadata")) {
     const metadata = await provider.getAssetMetadata("rgb:x");
     BigInt(metadata.issuedSupply);
     // @ts-expect-error u64 supply is an exact decimal string

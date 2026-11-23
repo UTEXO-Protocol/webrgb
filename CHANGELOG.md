@@ -6,6 +6,21 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking
+
+- Make every `RgbProvider` method required in the types: `signMessage`,
+  `createUtxos`, `getBtcBalance`, `refresh`, `getAssetMetadata`, `burnAsset`,
+  `getConsignment` and `getReceivedMint` lose their `?`. Discover support
+  through `getInfo().methods` only. A wallet that does not serve a method must
+  still define it and reject with `METHOD_NOT_SUPPORTED`. This matches the
+  KaleidoSwap `@kaleidorg/webrgb` contract. Code that calls `supports()` keeps
+  working; the old `provider.method &&` checks can be dropped.
+- The conformance suite fails a missing method even when it is unlisted, and
+  calls unlisted read-only methods to check that they reject with
+  `METHOD_NOT_SUPPORTED`.
+- `createMockProvider()` always defines `burnAsset` and `getConsignment`;
+  unconfigured, they reject with `METHOD_NOT_SUPPORTED`.
+
 ## [0.1.7]
 
 ### Changed

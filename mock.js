@@ -258,30 +258,34 @@ export function createMockProvider(options = {}) {
       };
     },
 
-    ...(options.burnAsset ? {
-      /** @param {import("./index.js").RgbBurnAssetArgs} args */
-      async burnAsset(args) {
-        const request = structuredClone(args);
-        await call("burnAsset", [request]);
-        if (!options.burnAsset) throw fail("No burn fixture configured", "METHOD_NOT_SUPPORTED");
-        const destination = request?.burnDestination;
-        if (!request || "burnRecipient" in request || request.network !== network ||
-            typeof request.amount !== "string" || !/^[1-9]\d*$/.test(request.amount) ||
-            BigInt(request.amount) > 18446744073709551615n || !destination || destination.version !== 1 ||
-            typeof destination.chainId !== "string" || !destination.chainId.includes(":") ||
-            typeof destination.address !== "string" || !destination.address ||
-            !Number.isInteger(destination.dstEid) || destination.dstEid < 0 || destination.dstEid > 0xffffffff ||
-            "destinationChainId" in destination || "recipient" in destination ||
-            (request.feeRate !== undefined && (!Number.isSafeInteger(request.feeRate) || request.feeRate < 1)) ||
-            (request.minConfirmations !== undefined && (!Number.isInteger(request.minConfirmations) || request.minConfirmations < 1 || request.minConfirmations > 255))) {
-          throw fail("burnAsset requires a single native-address destination and exact amount", "INVALID_PARAMS");
-        }
-        requireAsset(request.assetId);
-        confirm();
-        // The caller-supplied fixture owns route/address validation and the result.
-        return options.burnAsset(request);
-      },
-    } : {}),
+    /** @param {import("./index.js").RgbBurnAssetArgs} args */
+    async burnAsset(args) {
+      const request = structuredClone(args);
+      await call("burnAsset", [request]);
+      if (!options.burnAsset) throw fail("No burn fixture configured", "METHOD_NOT_SUPPORTED");
+      const destination = request?.burnDestination;
+      if (!request || "burnRecipient" in request || request.network !== network ||
+          typeof request.amount !== "string" || !/^[1-9]\d*$/.test(request.amount) ||
+          BigInt(request.amount) > 18446744073709551615n || !destination || destination.version !== 1 ||
+          typeof destination.chainId !== "string" || !destination.chainId.includes(":") ||
+          typeof destination.address !== "string" || !destination.address ||
+          !Number.isInteger(destination.dstEid) || destination.dstEid < 0 || destination.dstEid > 0xffffffff ||
+          "destinationChainId" in destination || "recipient" in destination ||
+          (request.feeRate !== undefined && (!Number.isSafeInteger(request.feeRate) || request.feeRate < 1)) ||
+          (request.minConfirmations !== undefined && (!Number.isInteger(request.minConfirmations) || request.minConfirmations < 1 || request.minConfirmations > 255))) {
+        throw fail("burnAsset requires a single native-address destination and exact amount", "INVALID_PARAMS");
+      }
+      requireAsset(request.assetId);
+      confirm();
+      // The caller-supplied fixture owns route/address validation and the result.
+      return options.burnAsset(request);
+    },
+
+    /** @param {import("./index.js").RgbGetConsignmentArgs} args */
+    async getConsignment(args) {
+      await call("getConsignment", [args]);
+      throw fail("The mock keeps no burn consignments", "METHOD_NOT_SUPPORTED");
+    },
 
     /** @param {import("./index.js").RgbIssueAssetArgs} args */
     async issueAsset(args) {

@@ -576,15 +576,18 @@ describe("conformance", () => {
     assert.equal(report.ok, true, formatReport(report));
   });
 
-  it("allows a provider without the optional BFA methods", async () => {
+  it("keeps unserved BFA methods present but unlisted, rejecting with METHOD_NOT_SUPPORTED", async () => {
     const rgb = createMockProvider();
     const report = await runConformance(rgb);
     assert.equal(report.ok, true, formatReport(report));
+    await rgb.enable();
     for (const method of ["burnAsset", "getConsignment"]) {
       assert.equal(supports(await rgb.getInfo(), method), false);
-      assert.equal(rgb[method], undefined);
+      assert.equal(typeof rgb[method], "function");
+      await assert.rejects(rgb[method]({}), { code: "METHOD_NOT_SUPPORTED" });
       assert.equal(report.checks.find((c) => c.name === `${method}-available`)?.status, "skip");
     }
+    assert.equal(rgb.calls.some(({ method }) => method === "burnAsset" || method === "getConsignment"), true);
   });
 
   it("checks advertised BFA methods without burning or sharing a proof", async () => {
@@ -607,13 +610,10 @@ describe("conformance", () => {
     }
   });
 
-  it("catches an advertised BFA method missing from the provider", async () => {
+  it("catches a BFA method missing from the provider, listed or not", async () => {
     const rgb = createMockProvider();
-    const getInfo = rgb.getInfo.bind(rgb);
-    rgb.getInfo = async () => {
-      const info = await getInfo();
-      return { ...info, methods: [...info.methods, "burnAsset", "getConsignment"] };
-    };
+    delete rgb.burnAsset;
+    delete rgb.getConsignment;
     const report = await runConformance(rgb);
     assert.equal(report.ok, false);
     for (const method of ["burnAsset", "getConsignment"]) {

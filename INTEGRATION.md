@@ -32,8 +32,7 @@ bridge asset. A burn caller uses the single-destination contract:
 import { supports, type RgbBurnAssetArgs } from "@utexo/webrgb";
 
 const info = await provider.getInfo();
-if (!supports(info, "burnAsset") || !supports(info, "getConsignment") ||
-    !provider.burnAsset || !provider.getConsignment) {
+if (!supports(info, "burnAsset") || !supports(info, "getConsignment")) {
   throw new Error("This wallet does not support BFA burn proofs");
 }
 const args: RgbBurnAssetArgs = {
@@ -83,7 +82,7 @@ After a timeout, recover the saved burn from wallet history; do not burn again.
 Check support before requesting a signature:
 
 ```ts
-if (supports(await provider.getInfo(), "signMessage") && provider.signMessage) {
+if (supports(await provider.getInfo(), "signMessage")) {
   const { signature } = await provider.signMessage(message);
 }
 ```
@@ -102,7 +101,7 @@ bridge to prepare the mint, then check the wallet's result:
 import { providerErrorCode, supports } from "@utexo/webrgb";
 
 const info = await provider.getInfo();
-if (!supports(info, "getReceivedMint") || !provider.getReceivedMint) {
+if (!supports(info, "getReceivedMint")) {
   throw new Error("This wallet cannot check a prepared mint");
 }
 

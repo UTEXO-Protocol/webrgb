@@ -438,39 +438,41 @@ export interface RgbPayLnInvoiceResult {
 export type RgbEvent = "transferReceived" | "transferSettled";
 
 export interface RgbProvider {
+  // Every method is always present. A wallet that does not serve one leaves it
+  // out of `getInfo().methods` and rejects calls with `METHOD_NOT_SUPPORTED`.
   readonly enabled: boolean;
   /** Connect the origin. Shares the approval with webln/webbtc. */
   enable(): Promise<void>;
   getInfo(): Promise<RgbInfo>;
   /** Bitcoin address of the RGB wallet, used to anchor RGB state. */
   getAddress(): Promise<{ address: string }>;
-  /** Optional; asks the user to sign the unchanged message. */
-  signMessage?(message: string): Promise<RgbSignMessageResult>;
+  /** Asks the user to sign the unchanged message. */
+  signMessage(message: string): Promise<RgbSignMessageResult>;
   blindReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
   witnessReceive(args?: RgbWitnessReceiveArgs): Promise<RgbWitnessReceiveResult>;
-  /** Optional; spends bitcoin to create colorable UTXOs, with user confirmation. */
-  createUtxos?(args?: RgbCreateUtxosArgs): Promise<RgbCreateUtxosResult>;
-  /** Optional aggregate read, without revealing UTXO identities. */
-  getBtcBalance?(): Promise<RgbBtcBalance>;
-  /** Optional; advances transfers without a prompt. Native refresh failures reject. */
-  refresh?(assetId?: string): Promise<{ refreshed: boolean }>;
-  /** Optional; contract metadata, with exact initial supply. */
-  getAssetMetadata?(assetId: string): Promise<RgbAssetMetadata>;
+  /** Spends bitcoin to create colorable UTXOs, with user confirmation. */
+  createUtxos(args?: RgbCreateUtxosArgs): Promise<RgbCreateUtxosResult>;
+  /** Aggregate read, without revealing UTXO identities. */
+  getBtcBalance(): Promise<RgbBtcBalance>;
+  /** Advances transfers without a prompt. Native refresh failures reject. */
+  refresh(assetId?: string): Promise<{ refreshed: boolean }>;
+  /** Contract metadata, with exact initial supply. */
+  getAssetMetadata(assetId: string): Promise<RgbAssetMetadata>;
 
   issueAsset(args: RgbIssueAssetArgs): Promise<RgbIssueAssetResult>;
   listAssets(): Promise<RgbAssetList>;
   getAssetBalance(assetId: string): Promise<RgbAssetBalance>;
   sendAsset(args: RgbSendAssetArgs): Promise<RgbSendAssetResult>;
-  /** Optional BFA burn; requires the single-destination contract and separate confirmation. */
-  burnAsset?(args: RgbBurnAssetArgs): Promise<RgbBurnAssetResult>;
+  /** BFA burn; requires the single-destination contract and separate confirmation. */
+  burnAsset(args: RgbBurnAssetArgs): Promise<RgbBurnAssetResult>;
   /** Share a saved burn consignment for third-party verification, with consent. */
-  getConsignment?(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
+  getConsignment(args: RgbGetConsignmentArgs): Promise<RgbGetConsignmentResult>;
   /**
-   * Optional pre-deposit inspection of an owned invoice's checked mint.
+   * Pre-deposit inspection of an owned invoice's checked mint.
    * Requires an enabled, authorized origin and raises no additional prompt.
    * Null means pending; authorization, validation and transport errors reject.
    */
-  getReceivedMint?(args: RgbGetReceivedMintArgs): Promise<RgbReceivedMint | null>;
+  getReceivedMint(args: RgbGetReceivedMintArgs): Promise<RgbReceivedMint | null>;
   listTransfers(assetId?: string): Promise<RgbTransferList>;
   getTransferStatus(
     transferId: string | number,
