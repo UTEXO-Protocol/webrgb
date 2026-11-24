@@ -483,7 +483,10 @@ export interface RgbProvider {
   cancelReceive(recipientId: string): Promise<{ cancelled: boolean }>;
   /** Aggregate read, without revealing UTXO identities. */
   getBtcBalance(): Promise<RgbBtcBalance>;
-  /** Advances transfers without a prompt. Native refresh failures reject. */
+  /**
+   * Advances transfers without a prompt. Native refresh failures reject, but
+   * some transfers may still have advanced: re-read state either way.
+   */
   refresh(assetId?: string): Promise<{ refreshed: boolean }>;
   /** Contract metadata, with exact initial supply. An unknown asset rejects with `ASSET_NOT_FOUND`. */
   getAssetMetadata(assetId: string): Promise<RgbAssetMetadata>;

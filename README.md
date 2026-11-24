@@ -191,7 +191,15 @@ The error crosses a `postMessage` boundary on its way out of the wallet, so what
 
 ## Versioning
 
-`@utexo/webrgb` starts at `0.1.0` and is versioned independently of the upstream package.
+`@utexo/webrgb` starts at `0.1.0` and is versioned independently of the upstream package. Each release is based on one upstream `@kaleidorg/webrgb` version:
+
+| `@utexo/webrgb` | Upstream base |
+| --- | --- |
+| 0.1.0 – 0.1.5 | 0.3.0 |
+| 0.1.6 – 0.1.7 | 0.3.0, with `createUtxos`, `getBtcBalance`, `refresh` and `getAssetMetadata` ported from 0.4.0 |
+| Unreleased (`dev`) | 0.5.0 |
+
+The [changelog](./CHANGELOG.md) states the base of every release.
 
 The declarations mirror `SPEC.md` and the extension's `src/injected.ts`. A method added to the provider lands here as a minor bump; a changed signature as a major bump. If the two disagree, trust the wallet and open an issue.
 

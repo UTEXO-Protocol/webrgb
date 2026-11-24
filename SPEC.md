@@ -1,10 +1,10 @@
 # The WebRGB provider interface
 
-**Status:** draft, WebRGB 0.1.7 contract. The base interface follows upstream
-`@kaleidorg/webrgb` 0.5.0 and is described by `index.d.ts` in this repository.
-The `burnAsset`, `getConsignment` and `getReceivedMint` methods are BFA
-extensions provided by this fork. A wallet need not serve them; see `methods`
-in §3.
+**Status:** draft. The interface follows upstream `@kaleidorg/webrgb` 0.5.0
+and is described by `index.d.ts` in this repository. It adds the BFA methods
+`burnAsset`, `getConsignment` and `getReceivedMint`, which are proposed for the
+upstream core. Like any other method, a wallet need not serve them; see
+`methods` in §4.
 
 A **wallet** injects a provider into a web page. A **dApp** calls it to issue,
 receive, send and track [RGB](https://rgb.tech) assets, and to pay or receive
@@ -165,6 +165,8 @@ around them.
   state. A successful backend unable to report changes may return false.
   Wallets MUST inspect per-transfer native failures as well as thrown errors;
   failures within the requested scope MUST reject using §6, not return false.
+  A rejection does not mean nothing changed: other transfers may have
+  advanced, so callers SHOULD re-read transfer state after any `refresh`.
 - **`getAssetMetadata(assetId)`** returns the typed contract metadata.
   `issuedSupply` is the initial supply as a canonical unsigned u64 decimal
   string, including zero. It is not the current wallet balance or circulating
