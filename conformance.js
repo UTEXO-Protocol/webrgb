@@ -18,6 +18,34 @@ const CORE_METHODS = [
 
 const LN_METHODS = ["makeLnInvoice", "payLnInvoice"];
 
+// Every method `RgbProvider` declares, served or not.
+/** @type {readonly Exclude<keyof import("./index.js").RgbProvider, "enabled">[]} */
+const PROVIDER_METHODS = [
+  "enable",
+  "getInfo",
+  "getAddress",
+  "blindReceive",
+  "witnessReceive",
+  "createUtxos",
+  "cancelReceive",
+  "getBtcBalance",
+  "refresh",
+  "getAssetMetadata",
+  "signPsbt",
+  "signMessage",
+  "issueAsset",
+  "listAssets",
+  "getAssetBalance",
+  "sendAsset",
+  "listTransfers",
+  "getTransferStatus",
+  "decodeRgbInvoice",
+  "makeLnInvoice",
+  "payLnInvoice",
+  "on",
+  "off",
+];
+
 /**
  * @param {import("./index.js").RgbProvider} provider
  * @param {import("./conformance.js").ConformanceOptions} [options]
@@ -131,6 +159,36 @@ export async function runConformance(provider, options = {}) {
     }
   });
 
+  await check("methods-present", () => {
+    const missing = PROVIDER_METHODS.filter((m) => typeof provider[m] !== "function");
+    assert(missing.length === 0, `provider lacks ${missing.join(", ")}; unserved methods must reject instead`);
+  });
+
+  // An unlisted method must reject with METHOD_NOT_SUPPORTED. Only reads that
+  // cannot prompt are called here, with a nonexistent asset where one is taken;
+  // methods that prompt, spend or share data are checked for presence only.
+  /** @type {Partial<Record<import("./index.js").RgbMethod, () => Promise<unknown>>>} */
+  const unlistedProbes = {
+    getBtcBalance: () => provider.getBtcBalance(),
+    refresh: () => provider.refresh("rgb:webrgb-conformance-no-such-asset"),
+    getAssetMetadata: () => provider.getAssetMetadata("rgb:webrgb-conformance-no-such-asset"),
+  };
+  for (const [method, probe] of Object.entries(unlistedProbes)) {
+    await check(`${method}-unlisted`, async () => {
+      const seen = info;
+      if (!seen) return "getInfo() did not return";
+      if (supports(seen, method)) return `the wallet serves ${method}`;
+      try {
+        await probe?.();
+      } catch (err) {
+        const code = providerErrorCode(err);
+        assert(code === "METHOD_NOT_SUPPORTED", `unlisted ${method} rejected with ${code}, not METHOD_NOT_SUPPORTED`);
+        return;
+      }
+      throw new Error(`${method} is absent from methods but was served anyway`);
+    });
+  }
+
   await check("getAddress-shape", async () => {
     const result = await provider.getAddress();
     assert(
@@ -236,12 +294,17 @@ export async function runConformance(provider, options = {}) {
     const balance = await provider.getBtcBalance();
     for (const side of /** @type {const} */ (["vanilla", "colored"])) {
       for (const field of /** @type {const} */ (["settled", "future", "spendable"])) {
-        assert(typeof balance?.[side]?.[field] === "number", `${side}.${field} is not a number`);
+        const sats = balance?.[side]?.[field];
+        assert(
+          Number.isSafeInteger(sats) && /** @type {number} */ (sats) >= 0,
+          `${side}.${field} is not a nonnegative safe integer`,
+        );
       }
     }
     assert(
-      balance.freeColorableUtxos === null || typeof balance.freeColorableUtxos === "number",
-      "freeColorableUtxos is neither a number nor null",
+      balance.freeColorableUtxos === null ||
+        (Number.isSafeInteger(balance.freeColorableUtxos) && balance.freeColorableUtxos >= 0),
+      "freeColorableUtxos is neither a nonnegative safe integer nor null",
     );
     const leak = findOutpoint(balance);
     assert(!leak, `getBtcBalance() exposes an outpoint (${leak})`);
@@ -270,9 +333,12 @@ export async function runConformance(provider, options = {}) {
     assert(meta.ticker === null || typeof meta.ticker === "string", "ticker is neither a string nor null");
     assert(typeof meta.name === "string", "name is not a string");
     assert(meta.details === null || typeof meta.details === "string", "details is neither a string nor null");
-    for (const field of /** @type {const} */ (["precision", "issuedSupply", "timestamp"])) {
-      assert(typeof meta[field] === "number", `${field} is not a number`);
-    }
+    assert(
+      Number.isInteger(meta.precision) && meta.precision >= 0 && meta.precision <= 255,
+      "precision is not an integer in 0..255",
+    );
+    assert(typeof meta.issuedSupply === "number", "issuedSupply is not a number");
+    assert(Number.isSafeInteger(meta.timestamp), "timestamp is not a safe integer");
     assert(
       meta.media === null ||
         (typeof meta.media?.mime === "string" && typeof meta.media?.digest === "string"),

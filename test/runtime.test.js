@@ -321,6 +321,8 @@ describe("mock provider", () => {
     const sent = await rgb.sendAsset({ assetId, amount: 100, recipientId: "utxob:them" });
     assert.equal((await rgb.getAssetBalance(assetId)).balance, 900);
     assert.equal(sent.status, "WaitingCounterparty");
+    // The initial supply does not follow the balance.
+    assert.equal((await rgb.getAssetMetadata(assetId)).issuedSupply, 1000);
 
     const transfers = toTransferArray(await rgb.listTransfers(assetId));
     assert.equal(transfers.length, 1);
@@ -398,6 +400,13 @@ describe("mock provider", () => {
     assert.equal((await rgb.decodeRgbInvoice("rgb:a/RGB20/5+utxob:five")).amount, 5);
   });
 
+  it("decodes the amount of a witness invoice", async () => {
+    const rgb = createMockProvider();
+    await rgb.enable();
+    assert.equal((await rgb.decodeRgbInvoice("rgb:a/RGB20/7+wvout:seven")).amount, 7);
+    assert.equal((await rgb.decodeRgbInvoice("rgb:a/RGB20/0+wvout:zero")).amount, null);
+  });
+
   it("reports the confirmations it will wait for, raised to its floor", async () => {
     const rgb = createMockProvider({ minConfirmationsFloor: 3, assets: [{ id: "rgb:a" }] });
     await rgb.enable();
@@ -446,7 +455,10 @@ describe("mock provider", () => {
   it("checks createUtxos arguments before prompting, and refuses without funds", async () => {
     const rgb = createMockProvider({ rejectConfirmations: true });
     await rgb.enable();
-    for (const bad of [{ num: 0 }, { size: 1.5 }, { feeRate: -1 }]) {
+    for (const bad of [
+      { num: 0 }, { num: 256 }, { size: 1.5 }, { size: 2 ** 32 },
+      { feeRate: -1 }, { feeRate: Infinity }, { feeRate: NaN },
+    ]) {
       await assert.rejects(rgb.createUtxos(bad), (err) => {
         assert.equal(providerErrorCode(err), "INVALID_PARAMS");
         return true;
@@ -457,13 +469,32 @@ describe("mock provider", () => {
       return true;
     });
 
-    const poor = createMockProvider({ vanillaSats: 1000 });
+    // Funds are checked before the prompt too, so a refusing user never sees it.
+    const poor = createMockProvider({ vanillaSats: 1000, rejectConfirmations: true });
     await poor.enable();
     await assert.rejects(poor.createUtxos(), (err) => {
       assert.equal(providerErrorCode(err), "INTERNAL_ERROR");
       assert.match(err.message, /bitcoin/);
       return true;
     });
+  });
+
+  it("counts colored bitcoin by each UTXO's size", async () => {
+    const rgb = createMockProvider({ freeColorableUtxos: 1 });
+    await rgb.enable();
+    await rgb.createUtxos({ num: 2, size: 1000 });
+    const before = await rgb.getBtcBalance();
+    assert.equal(before.freeColorableUtxos, 3);
+    assert.deepEqual(before.colored, { settled: 5000, future: 5000, spendable: 5000 });
+
+    // A blinded receive reserves one UTXO: still colored, no longer spendable.
+    const { recipientId } = await rgb.blindReceive();
+    const reserved = await rgb.getBtcBalance();
+    assert.equal(reserved.colored.settled, 5000);
+    assert.equal(reserved.colored.spendable, 5000 - 1000);
+
+    await rgb.cancelReceive(String(recipientId));
+    assert.deepEqual((await rgb.getBtcBalance()).colored, before.colored);
   });
 
   it("cancels a pending receive and releases its UTXO", async () => {
@@ -495,8 +526,14 @@ describe("mock provider", () => {
 
     const refusing = createMockProvider({ rejectConfirmations: true });
     await refusing.enable();
-    await assert.rejects(refusing.signMessage(""), (err) => {
-      assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+    for (const bad of ["", "lone \uD83D surrogate", "\uDE00"]) {
+      await assert.rejects(refusing.signMessage(bad), (err) => {
+        assert.equal(providerErrorCode(err), "INVALID_PARAMS");
+        return true;
+      });
+    }
+    await assert.rejects(refusing.signMessage("paired \uD83D\uDE00 surrogates"), (err) => {
+      assert.equal(providerErrorCode(err), "USER_REJECTED");
       return true;
     });
     await assert.rejects(refusing.signMessage("hi"), (err) => {
@@ -699,6 +736,102 @@ describe("conformance", () => {
     const report = await runConformance(leaky);
     assert.equal(report.checks.find((c) => c.name === "getBtcBalance-shape")?.status, "fail");
     assert.equal(report.checks.find((c) => c.name === "getAssetMetadata-miss")?.status, "fail");
+  });
+
+  it("requires every method and probes unlisted reads", async () => {
+    const report = await runConformance(createMockProvider());
+    assert.equal(report.checks.find((c) => c.name === "methods-present")?.status, "pass");
+    for (const name of ["getBtcBalance-unlisted", "refresh-unlisted", "getAssetMetadata-unlisted"]) {
+      assert.equal(report.checks.find((c) => c.name === name)?.status, "skip", name);
+    }
+
+    const older = await runConformance(
+      createMockProvider({
+        methods: ["enable", "getInfo", "getAddress", "listAssets", "getAssetBalance",
+          "listTransfers", "getTransferStatus", "on", "off"],
+      }),
+    );
+    for (const name of ["getBtcBalance-unlisted", "refresh-unlisted", "getAssetMetadata-unlisted"]) {
+      assert.equal(older.checks.find((c) => c.name === name)?.status, "pass", formatReport(older));
+    }
+
+    const rgb = createMockProvider({ methods: ["enable", "getInfo", "getAddress", "listAssets",
+      "getAssetBalance", "listTransfers", "getTransferStatus", "on", "off"] });
+    const partial = Object.create(rgb);
+    partial.signPsbt = undefined;
+    partial.getBtcBalance = async () => ({
+      vanilla: { settled: 0, future: 0, spendable: 0 },
+      colored: { settled: 0, future: 0, spendable: 0 },
+      freeColorableUtxos: 0,
+    });
+    const bad = await runConformance(partial);
+    const present = bad.checks.find((c) => c.name === "methods-present");
+    assert.equal(present?.status, "fail");
+    assert.match(String(present?.detail), /signPsbt/);
+    assert.equal(bad.checks.find((c) => c.name === "getBtcBalance-unlisted")?.status, "fail");
+  });
+
+  it("rejects each fractional, negative or unsafe balance and metadata number", async () => {
+    const unsafe = Number.MAX_SAFE_INTEGER + 1;
+    const goodBalance = () => ({
+      vanilla: { settled: 1, future: 1, spendable: 1 },
+      colored: { settled: 0, future: 0, spendable: 0 },
+      freeColorableUtxos: 0,
+    });
+    const goodMeta = (/** @type {string} */ assetId) => ({ assetId, schema: "nia", ticker: null,
+      name: "A", details: null, precision: 2, issuedSupply: 1, timestamp: 1_700_000_000, media: null });
+
+    /**
+     * @param {(balance: any) => void} breakBalance
+     * @param {(meta: any) => void} breakMeta
+     */
+    const run = (breakBalance, breakMeta) => {
+      const odd = Object.create(createMockProvider({ assets: [{ id: "rgb:a", balance: 1 }] }));
+      odd.getBtcBalance = async () => {
+        const balance = goodBalance();
+        breakBalance(balance);
+        return balance;
+      };
+      odd.getAssetMetadata = async (/** @type {string} */ assetId) => {
+        if (assetId !== "rgb:a") throw Object.assign(new Error("no"), { code: "ASSET_NOT_FOUND" });
+        const meta = goodMeta(assetId);
+        breakMeta(meta);
+        return meta;
+      };
+      return runConformance(odd);
+    };
+    const status = async (/** @type {Promise<any>} */ report, /** @type {string} */ name) =>
+      (await report).checks.find((/** @type {any} */ c) => c.name === name)?.status;
+
+    // The unbroken fixture passes, so each failure below comes from one field.
+    const clean = await run(() => {}, () => {});
+    assert.equal(await status(Promise.resolve(clean), "getBtcBalance-shape"), "pass", formatReport(clean));
+    assert.equal(await status(Promise.resolve(clean), "getAssetMetadata-shape"), "pass", formatReport(clean));
+
+    /** @type {[string, (balance: any) => void][]} */
+    const badBalances = [
+      ["fractional sats", (b) => { b.vanilla.settled = 1.5; }],
+      ["negative sats", (b) => { b.colored.spendable = -1; }],
+      ["unsafe sats", (b) => { b.vanilla.future = unsafe; }],
+      ["fractional count", (b) => { b.freeColorableUtxos = 0.5; }],
+      ["negative count", (b) => { b.freeColorableUtxos = -1; }],
+      ["unsafe count", (b) => { b.freeColorableUtxos = unsafe; }],
+    ];
+    for (const [label, breakBalance] of badBalances) {
+      assert.equal(await status(run(breakBalance, () => {}), "getBtcBalance-shape"), "fail", label);
+    }
+
+    /** @type {[string, (meta: any) => void][]} */
+    const badMetas = [
+      ["precision above 255", (m) => { m.precision = 256; }],
+      ["negative precision", (m) => { m.precision = -1; }],
+      ["fractional precision", (m) => { m.precision = 1.5; }],
+      ["fractional timestamp", (m) => { m.timestamp = 1.5; }],
+      ["unsafe timestamp", (m) => { m.timestamp = unsafe; }],
+    ];
+    for (const [label, breakMeta] of badMetas) {
+      assert.equal(await status(run(() => {}, breakMeta), "getAssetMetadata-shape"), "fail", label);
+    }
   });
 
   it("catches a wallet that wraps its lists", async () => {

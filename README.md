@@ -70,7 +70,7 @@ Feature-detect with `supports(info, method)` rather than assuming a method exist
 
 ## Receiving into an empty wallet
 
-A blinded invoice needs a free colorable UTXO. A fresh wallet, or one whose UTXOs all hold assets, has none and rejects with `NO_AVAILABLE_UTXOS`. A faucet-style page can then ask the wallet to create some, or fall back to a witness invoice, which the sender funds:
+A blinded invoice needs a receiving slot on a colorable UTXO. A fresh wallet has none; a wallet whose UTXOs all hold assets may still have room on one of them, or may not. When it cannot allocate a slot, it rejects with `NO_AVAILABLE_UTXOS`. A faucet-style page can then ask the wallet to create some, or fall back to a witness invoice, which the sender funds:
 
 ```ts
 import { providerErrorCode, supports } from "@kaleidorg/webrgb";
@@ -88,7 +88,7 @@ async function receiveInvoice(rgb: RgbProvider, info: RgbInfo): Promise<string> 
 }
 ```
 
-`getBtcBalance().freeColorableUtxos` tells you up front, and `cancelReceive(recipientId)` releases the UTXO an abandoned invoice reserved.
+`getBtcBalance().freeColorableUtxos` counts empty UTXOs, not receiving capacity, so `0` does not mean a receive will fail: try it and handle the error. `cancelReceive(recipientId)` releases the UTXO an abandoned invoice reserved.
 
 ## Signing PSBTs
 
@@ -159,7 +159,7 @@ console.log(formatReport(await runConformance(window.rgb!)));
 | `METHOD_NOT_SUPPORTED` | The connected wallet cannot serve this method, or no provider was found |
 | `INVALID_PARAMS` | An argument is malformed or out of range; `error.message` names it |
 | `ASSET_NOT_FOUND` | The call names an asset the wallet does not know — for `blindReceive`, omit `assetId` |
-| `NO_AVAILABLE_UTXOS` | No free colorable UTXO — call `createUtxos()` or use `witnessReceive()` |
+| `NO_AVAILABLE_UTXOS` | No suitable colorable UTXO or allocation slot for the operation — call `createUtxos()` or use `witnessReceive()` |
 | `UNSAFE_PSBT` | `signPsbt` was asked to sign an input that holds RGB assets |
 | `INTERNAL_ERROR` | Anything else; see `error.message` |
 

@@ -6,6 +6,40 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Conformance `methods-present`: every `RgbProvider` method must exist as a
+  function, served or not. `getBtcBalance-unlisted`, `refresh-unlisted` and
+  `getAssetMetadata-unlisted` call those reads when `methods` does not list
+  them and expect `METHOD_NOT_SUPPORTED`; the existing Lightning probe stays.
+
+### Changed
+
+- SPEC.md §4: a method's presence is not a support check; dApps check
+  `methods`.
+- `freeColorableUtxos` counts empty UTXOs, not receiving capacity: `0` does not
+  mean `blindReceive` rejects; it rejects with `NO_AVAILABLE_UTXOS` when the
+  wallet cannot allocate a receiving slot. README and the playground say the
+  same.
+- `signMessage` also rejects a string with an unpaired surrogate with
+  `INVALID_PARAMS`.
+- `createUtxos`: `num` is 1..255, `size` a positive u32 and `feeRate` positive
+  and finite; arguments and funds are checked before prompting; `created` may
+  be lower than `num`; dApps must not retry automatically.
+- `getBtcBalance` amounts and `freeColorableUtxos` are nonnegative safe
+  integers; `getAssetMetadata` `precision` is an integer in 0..255 and
+  `timestamp` a safe integer. Conformance checks both.
+- `refresh` rejects failures within its scope, including per-transfer failures
+  reported without throwing. A rejection does not mean no transfer advanced.
+
+### Fixed
+
+- Mock: `getAssetMetadata().issuedSupply` stays the initial supply after a
+  send instead of following the balance.
+- Mock: `decodeRgbInvoice` reads the amount of a witness (`wvout`) invoice.
+- Mock: colored bitcoin in `getBtcBalance` uses each UTXO's size, so it stays
+  right after `createUtxos({ size })`.
+
 ## [0.5.0] - 2026-10-15
 
 ### Added

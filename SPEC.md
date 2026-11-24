@@ -102,6 +102,9 @@ around them.
   `issueAsset` only when the runtime can mint. Each method added in a later
   version appears only when the wallet serves it, so an `"RGB_LN"` wallet
   lists those its node supports and rejects the rest.
+  Every method in `index.d.ts` MUST exist on the provider as a function,
+  including methods the wallet does not serve. A dApp MUST check `methods`
+  for support: a method's presence is not a support check.
 - **`getAddress()`** returns a Bitcoin address of the wallet that anchors its
   RGB state. It is not an RGB invoice.
 - **`signMessage(message)`** signs a UTF-8 string and returns `{ signature }`
@@ -111,7 +114,9 @@ around them.
   challenge it issued. The wallet signs with a key it keeps stable across
   calls, so the recovered key identifies it from one session to the next. The wallet
   MUST show the message unchanged with the requesting origin, and MUST reject
-  an empty or non-string `message` with `INVALID_PARAMS` before prompting.
+  an empty or non-string `message` with `INVALID_PARAMS` before prompting. It
+  MUST also reject a string with an unpaired surrogate: encoding it as UTF-8
+  would replace it, so the signed bytes would differ from the message shown.
 - **`blindReceive({ assetId?, amount?, minConfirmations?, … })`** returns an
   RGB invoice against a blinded UTXO. Omitting `amount` means any amount.
   Omitting `assetId` means any asset: the invoice names no contract, and it is
@@ -124,17 +129,24 @@ around them.
   A wallet MAY enforce a higher floor, and SHOULD raise a lower request to its
   floor rather than reject. The confirmation MUST show the value actually used,
   and the result MUST carry it as `minConfirmations`.
-  A blinded invoice needs a free colorable UTXO; a wallet that has none MUST
-  reject with `NO_AVAILABLE_UTXOS`, and the page SHOULD offer `createUtxos()`
-  or `witnessReceive()`.
+  A blinded invoice needs a receiving slot on a colorable UTXO; a wallet that
+  cannot allocate one MUST reject with `NO_AVAILABLE_UTXOS`, and the page
+  SHOULD offer `createUtxos()` or `witnessReceive()`. A wallet MAY allocate
+  the slot on a UTXO that already holds an allocation, so it MUST NOT reject
+  solely because `freeColorableUtxos` is `0`.
 - **`witnessReceive(args?)`** takes the same arguments and returns the same
   result as `blindReceive`, but the invoice is a witness invoice: the sender
   funds a new UTXO, so it works on a wallet with no colorable UTXO at all.
 - **`createUtxos({ num?, size?, feeRate? })`** spends on-chain bitcoin to
   create colorable UTXOs and returns `{ created, size, feeRate? }`. Omitted
-  arguments take wallet defaults. Bad arguments MUST reject with
+  arguments take wallet defaults. `num` is an integer in 1..255, `size` a
+  positive u32 in sats, and `feeRate` a positive finite number in sat/vB. Bad
+  arguments, including values outside the backend's limits, MUST reject with
   `INVALID_PARAMS` before prompting. A wallet without enough bitcoin MUST
-  reject with `INTERNAL_ERROR` and a message saying so.
+  reject with `INTERNAL_ERROR` and a message saying so, also before
+  prompting. The confirmation MUST show the outputs and the fee. `created` is
+  the number actually created, which MAY be lower than `num`. A dApp MUST NOT
+  retry the call automatically: a timeout does not mean nothing was spent.
 - **`cancelReceive(recipientId)`** fails a pending receive the wallet created,
   releasing the UTXO a blinded invoice reserved, and resolves
   `{ cancelled: true }`. Only a receive still `WaitingCounterparty` can be
@@ -145,17 +157,25 @@ around them.
   reject with `INVALID_PARAMS`.
 - **`getBtcBalance()`** returns `{ vanilla, colored, freeColorableUtxos }`.
   `vanilla` and `colored` each carry `settled`, `future` and `spendable` in
-  sats. `freeColorableUtxos` counts colorable UTXOs with no RGB allocation,
-  settled or pending, and not reserved by a pending receive; it is `null`
-  when the wallet cannot tell. The result is aggregate figures only and MUST
-  NOT expose outpoints.
+  sats, as nonnegative safe integers. `freeColorableUtxos` is the exact count
+  of colorable UTXOs with no RGB allocation, settled or pending, and not
+  reserved by a pending receive, as a nonnegative safe integer; it is `null`
+  when the wallet cannot tell. It counts empty UTXOs, not receiving capacity:
+  `0` does not mean `blindReceive` will reject. The result is aggregate
+  figures only and MUST NOT expose outpoints.
 - **`refresh(assetId?)`** syncs the wallet and advances pending transfers.
   `refreshed` says whether any transfer changed state, and is `false` when
-  the wallet cannot tell.
+  the wallet cannot tell. A failure within the requested scope MUST reject
+  under §6, including a per-transfer failure the backend reports without
+  throwing; `{ refreshed: false }` is only for a successful refresh. A
+  rejection does not mean no transfer advanced, so a dApp SHOULD re-read
+  transfer state after any `refresh`.
 - **`getAssetMetadata(assetId)`** returns the asset's contract data:
   `{ assetId, schema, ticker, name, details, precision, issuedSupply,
   timestamp, media }`, with `ticker`, `details` and `media` `null` when
-  absent. An unknown asset MUST reject with `ASSET_NOT_FOUND`.
+  absent. `precision` is an integer in 0..255 and `timestamp` a Unix time in
+  seconds, as a safe integer. An unknown asset MUST reject with
+  `ASSET_NOT_FOUND`.
 - **`signPsbt(psbt, { finalize? })`** signs, in a base64 PSBT, the inputs the
   RGB wallet controls and returns `{ psbt, signedInputs }`, the PSBT again in
   base64 and finalized when `finalize` is `true`. A PSBT with no input the
@@ -224,7 +244,7 @@ Every rejection MUST be an `Error` carrying a `code`:
 | `METHOD_NOT_SUPPORTED` | This wallet cannot serve this method |
 | `INVALID_PARAMS` | An argument is malformed or out of range; `message` names it |
 | `ASSET_NOT_FOUND` | The call names an asset the wallet does not know |
-| `NO_AVAILABLE_UTXOS` | The wallet has no free colorable UTXO; offer `createUtxos()` or `witnessReceive()` |
+| `NO_AVAILABLE_UTXOS` | No suitable colorable UTXO or allocation slot is available for the operation; offer `createUtxos()` or `witnessReceive()` |
 | `UNSAFE_PSBT` | `signPsbt` would sign an input that holds RGB assets |
 | `INTERNAL_ERROR` | Anything else; `message` carries the detail |
 
@@ -253,8 +273,14 @@ console.log(formatReport(await runConformance(window.rgb)));
 
 It never issues, sends, creates an invoice or UTXOs, cancels or signs, so it
 raises no confirmation and costs nothing to run against a funded wallet. It
-checks `getBtcBalance`, `getAssetMetadata` and `refresh` only when `methods`
-lists them.
+checks that every method exists as a function. It checks the results of
+`getBtcBalance`, `getAssetMetadata` and `refresh` when `methods` lists them.
+When `methods` omits them, it calls `getBtcBalance()`, and `refresh` and
+`getAssetMetadata` with a nonexistent asset, and expects each to reject with
+`METHOD_NOT_SUPPORTED`. As before, it also calls one unlisted Lightning method
+and expects the same code. Other unlisted methods are only checked for
+presence. These probes expect a rejection; they cannot stop a nonconforming
+wallet from answering, and `getBtcBalance()` then returns balance data.
 
 ## 8. Changes
 

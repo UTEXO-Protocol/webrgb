@@ -97,7 +97,9 @@ export interface RgbInfo {
   /**
    * Methods the connected wallet can serve. `issueAsset` appears only when the
    * runtime can mint; `makeLnInvoice` / `payLnInvoice` only when `protocol` is
-   * `"RGB_LN"`. Test it with {@link supports} rather than assuming.
+   * `"RGB_LN"`. Test it with {@link supports} rather than assuming: every
+   * `RgbProvider` method exists as a function whether or not it is served, so
+   * a method's presence says nothing about support.
    */
   methods: RgbMethod[];
 }
@@ -136,21 +138,22 @@ export interface RgbBlindReceiveResult {
 }
 
 export interface RgbCreateUtxosArgs {
-  /** How many UTXOs to create. Wallet default when omitted. */
+  /** How many UTXOs to create, 1..255. Wallet default when omitted. */
   num?: number;
-  /** Sats per UTXO. Wallet default when omitted. */
+  /** Sats per UTXO, a positive u32. Wallet default when omitted. */
   size?: number;
-  /** sat/vB. The wallet's estimate when omitted. */
+  /** sat/vB, positive and finite. The wallet's estimate when omitted. */
   feeRate?: number;
 }
 
 export interface RgbCreateUtxosResult {
+  /** UTXOs actually created; may be fewer than `num`. */
   created: number;
   size: number;
   feeRate?: number;
 }
 
-/** One side of the wallet's bitcoin, in sats. */
+/** One side of the wallet's bitcoin, in sats: nonnegative safe integers. */
 export interface RgbBtcBalanceSide {
   settled: number;
   future: number;
@@ -164,7 +167,8 @@ export interface RgbBtcBalance {
   /**
    * Colorable UTXOs with no RGB allocation, settled or pending, and not
    * reserved by a pending receive; `null` when the wallet cannot tell.
-   * `0` means `blindReceive` will reject with `NO_AVAILABLE_UTXOS`.
+   * `0` does not mean `blindReceive` will reject: a wallet may still allocate
+   * a receiving slot on an occupied UTXO.
    */
   freeColorableUtxos: number | null;
 }
@@ -175,8 +179,10 @@ export interface RgbAssetMetadata {
   ticker: string | null;
   name: string;
   details: string | null;
+  /** Integer, 0..255. */
   precision: number;
   issuedSupply: number;
+  /** Unix time in seconds, a safe integer. */
   timestamp: number;
   media: { mime: string; digest: string } | null;
 }
@@ -349,8 +355,8 @@ export interface RgbProvider {
   /** Bitcoin address of the RGB wallet, used to anchor RGB state. */
   getAddress(): Promise<{ address: string }>;
   /**
-   * Rejects with `NO_AVAILABLE_UTXOS` when the wallet has no free colorable
-   * UTXO; offer {@link RgbProvider.createUtxos} or
+   * Rejects with `NO_AVAILABLE_UTXOS` when the wallet cannot allocate a
+   * receiving slot; offer {@link RgbProvider.createUtxos} or
    * {@link RgbProvider.witnessReceive} then.
    */
   blindReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
@@ -359,7 +365,10 @@ export interface RgbProvider {
    * wallet. Same arguments and result as `blindReceive`.
    */
   witnessReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
-  /** Spend on-chain bitcoin to create colorable UTXOs. Prompts. */
+  /**
+   * Spend on-chain bitcoin to create colorable UTXOs. Prompts. Never retry
+   * it automatically: a timeout does not mean nothing was spent.
+   */
   createUtxos(args?: RgbCreateUtxosArgs): Promise<RgbCreateUtxosResult>;
   /**
    * Fail a pending receive this wallet created, releasing the UTXO it
@@ -368,7 +377,11 @@ export interface RgbProvider {
   cancelReceive(recipientId: string): Promise<{ cancelled: boolean }>;
   /** Read-only. */
   getBtcBalance(): Promise<RgbBtcBalance>;
-  /** Sync and advance pending transfers. Read-only from the user's side; no prompt. */
+  /**
+   * Sync and advance pending transfers. Read-only from the user's side; no
+   * prompt. A failure in the requested scope rejects; a rejection does not
+   * mean no transfer advanced, so re-read transfer state afterwards.
+   */
   refresh(assetId?: string): Promise<{ refreshed: boolean }>;
   /** Read-only. An unknown asset rejects with `ASSET_NOT_FOUND`. */
   getAssetMetadata(assetId: string): Promise<RgbAssetMetadata>;
@@ -378,7 +391,11 @@ export interface RgbProvider {
    * allocation: signing it outside a state transition destroys the assets.
    */
   signPsbt(psbt: string, opts?: RgbSignPsbtOptions): Promise<RgbSignPsbtResult>;
-  /** Sign `message` as shown to the user, in the LND `signmessage` format. Prompts. */
+  /**
+   * Sign `message` as shown to the user, in the LND `signmessage` format.
+   * Prompts. An empty or malformed string (a lone surrogate) rejects with
+   * `INVALID_PARAMS`.
+   */
   signMessage(message: string): Promise<RgbSignMessageResult>;
   issueAsset(args: RgbIssueAssetArgs): Promise<RgbIssueAssetResult>;
   listAssets(): Promise<RgbAssetList>;

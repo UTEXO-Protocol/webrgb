@@ -222,8 +222,9 @@
         <section>
           <h2>Bitcoin &amp; UTXOs</h2>
           <p class="note">
-            <code>blindReceive()</code> needs a free colorable UTXO and rejects with
-            <code>NO_AVAILABLE_UTXOS</code> without one. <code>signPsbt()</code> signs bitcoin-only
+            <code>blindReceive()</code> needs a receiving slot on a colorable UTXO and rejects with
+            <code>NO_AVAILABLE_UTXOS</code> when the wallet cannot allocate one; an empty UTXO count of 0
+            does not mean it will. <code>signPsbt()</code> signs bitcoin-only
             inputs; a wallet refuses one that holds RGB assets with <code>UNSAFE_PSBT</code>. The mock
             cannot sign Bitcoin and reads only PSBTs built with <code>mockPsbt()</code>.
           </p>

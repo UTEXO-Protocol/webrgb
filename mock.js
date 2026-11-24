@@ -53,24 +53,27 @@ export function createMockProvider(options = {}) {
   const latencyMs = options.latencyMs ?? 0;
   const minConfirmationsFloor = options.minConfirmationsFloor ?? 1;
   const utxoSize = 3000;
-  let freeUtxos = options.freeColorableUtxos ?? 5;
+  /** Sizes in sats of the free colorable UTXOs. */
+  const freeUtxos = Array.from({ length: options.freeColorableUtxos ?? 5 }, () => utxoSize);
   let vanillaSats = options.vanillaSats ?? 100_000;
   const createdAt = Math.floor(Date.now() / 1000);
   const methods =
     options.methods ?? (protocol === "RGB_LN" ? [...BASE_METHODS, ...LN_METHODS] : BASE_METHODS);
 
-  /** @type {Map<string, { asset: import("./index.js").RgbAsset, balance: number }>} */
+  /** `issuedSupply` is fixed at creation; `balance` changes as assets move. */
+  /** @type {Map<string, { asset: import("./index.js").RgbAsset, balance: number, issuedSupply: number }>} */
   const assets = new Map();
   for (const [index, entry] of (options.assets ?? []).entries()) {
     const { balance = 0, ...asset } = entry;
     const id = asset.id ?? asset.asset_id ?? `rgb:mock-${index + 1}`;
-    assets.set(id, { asset: { ...asset, id }, balance });
+    const issuedSupply = typeof asset.issuedSupply === "number" ? asset.issuedSupply : balance;
+    assets.set(id, { asset: { ...asset, id }, balance, issuedSupply });
   }
 
   /** @type {import("./index.js").RgbTransfer[]} */
   let transfers = [];
-  /** Pending receives by recipient id; `blinded` ones hold a UTXO. */
-  /** @type {Map<string, { blinded: boolean, status: string }>} */
+  /** Pending receives by recipient id; a blinded one holds a UTXO of `utxoSats`. */
+  /** @type {Map<string, { utxoSats: number | null, status: string }>} */
   const receives = new Map();
   /** @type {import("./mock.js").MockCall[]} */
   let calls = [];
@@ -120,11 +123,11 @@ export function createMockProvider(options = {}) {
   /**
    * @param {import("./index.js").RgbBlindReceiveArgs} args
    * @param {"utxob" | "wvout"} kind
-   * @param {boolean} blinded
+   * @param {number | null} utxoSats the reserved UTXO's size, or null for a witness receive
    */
-  function receiveInvoice(args, kind, blinded) {
+  function receiveInvoice(args, kind, utxoSats) {
     const recipientId = `${kind}:mock${nextId()}`;
-    receives.set(recipientId, { blinded, status: "WaitingCounterparty" });
+    receives.set(recipientId, { utxoSats, status: "WaitingCounterparty" });
     return {
       // An any-asset invoice leaves the contract out, like rgb-lib's `rgb:~/…`.
       invoice: `${args.assetId ?? "rgb:~"}/RGB20/${recipientId}`,
@@ -166,15 +169,14 @@ export function createMockProvider(options = {}) {
       await call("blindReceive", [args]);
       // Arguments are checked before the prompt, as a wallet does.
       if (args.assetId !== undefined) requireAsset(args.assetId);
-      if (freeUtxos < 1) {
+      if (freeUtxos.length < 1) {
         throw fail(
           "No free colorable UTXO; call createUtxos() or use witnessReceive()",
           "NO_AVAILABLE_UTXOS",
         );
       }
       confirm();
-      freeUtxos -= 1;
-      return receiveInvoice(args, "utxob", true);
+      return receiveInvoice(args, "utxob", /** @type {number} */ (freeUtxos.pop()));
     },
 
     /** @param {import("./index.js").RgbBlindReceiveArgs} [args] */
@@ -182,7 +184,7 @@ export function createMockProvider(options = {}) {
       await call("witnessReceive", [args]);
       if (args.assetId !== undefined) requireAsset(args.assetId);
       confirm();
-      return receiveInvoice(args, "wvout", false);
+      return receiveInvoice(args, "wvout", null);
     },
 
     /** @param {import("./index.js").RgbCreateUtxosArgs} [args] */
@@ -191,18 +193,23 @@ export function createMockProvider(options = {}) {
       const num = args.num ?? 3;
       const size = args.size ?? utxoSize;
       const feeRate = args.feeRate ?? 2;
-      if (!Number.isInteger(num) || num < 1) throw fail(`Invalid num: ${num}`, "INVALID_PARAMS");
-      if (!Number.isInteger(size) || size < 1) throw fail(`Invalid size: ${size}`, "INVALID_PARAMS");
-      if (!(typeof feeRate === "number" && feeRate > 0)) {
+      // Arguments and funds are checked before the prompt, as a wallet does.
+      if (!Number.isInteger(num) || num < 1 || num > 255) {
+        throw fail(`Invalid num: ${num}`, "INVALID_PARAMS");
+      }
+      if (!Number.isInteger(size) || size < 1 || size > 0xffffffff) {
+        throw fail(`Invalid size: ${size}`, "INVALID_PARAMS");
+      }
+      if (!(typeof feeRate === "number" && Number.isFinite(feeRate) && feeRate > 0)) {
         throw fail(`Invalid feeRate: ${feeRate}`, "INVALID_PARAMS");
       }
-      confirm();
       const cost = num * size + Math.ceil(feeRate * (110 + 43 * num));
       if (cost > vanillaSats) {
         throw fail(`Not enough bitcoin to create UTXOs: need ${cost} sats`, "INTERNAL_ERROR");
       }
+      confirm();
       vanillaSats -= cost;
-      freeUtxos += num;
+      for (let i = 0; i < num; i++) freeUtxos.push(size);
       return { created: num, size, feeRate };
     },
 
@@ -216,21 +223,24 @@ export function createMockProvider(options = {}) {
       const pending = receives.get(recipientId);
       if (!pending || pending.status !== "WaitingCounterparty") return { cancelled: false };
       pending.status = "Failed";
-      if (pending.blinded) freeUtxos += 1;
+      if (pending.utxoSats !== null) freeUtxos.push(pending.utxoSats);
       return { cancelled: true };
     },
 
     async getBtcBalance() {
       await call("getBtcBalance", []);
       const vanilla = { settled: vanillaSats, future: vanillaSats, spendable: vanillaSats };
-      const reserved = [...receives.values()].filter(
-        (r) => r.blinded && r.status === "WaitingCounterparty",
-      ).length;
-      const coloredSats = (freeUtxos + reserved) * utxoSize;
+      const sum = (/** @type {number[]} */ sizes) => sizes.reduce((total, sats) => total + sats, 0);
+      const free = sum(freeUtxos);
+      const reserved = sum(
+        [...receives.values()]
+          .filter((r) => r.status === "WaitingCounterparty")
+          .map((r) => r.utxoSats ?? 0),
+      );
       return {
         vanilla,
-        colored: { settled: coloredSats, future: coloredSats, spendable: freeUtxos * utxoSize },
-        freeColorableUtxos: freeUtxos,
+        colored: { settled: free + reserved, future: free + reserved, spendable: free },
+        freeColorableUtxos: freeUtxos.length,
       };
     },
 
@@ -245,7 +255,7 @@ export function createMockProvider(options = {}) {
     /** @param {string} assetId */
     async getAssetMetadata(assetId) {
       await call("getAssetMetadata", [assetId]);
-      const { asset, balance } = requireAsset(assetId);
+      const { asset, issuedSupply } = requireAsset(assetId);
       return {
         assetId,
         schema: typeof asset.schema === "string" ? asset.schema : "nia",
@@ -253,7 +263,7 @@ export function createMockProvider(options = {}) {
         name: asset.name ?? "",
         details: typeof asset.details === "string" ? asset.details : null,
         precision: asset.precision ?? 0,
-        issuedSupply: typeof asset.issuedSupply === "number" ? asset.issuedSupply : balance,
+        issuedSupply,
         timestamp: typeof asset.timestamp === "number" ? asset.timestamp : createdAt,
         media: null,
       };
@@ -284,8 +294,9 @@ export function createMockProvider(options = {}) {
     /** @param {string} message */
     async signMessage(message) {
       await call("signMessage", [message]);
-      if (typeof message !== "string" || message.length === 0) {
-        throw fail("message must be a non-empty string", "INVALID_PARAMS");
+      // A lone surrogate would be replaced when encoded as UTF-8, changing what is signed.
+      if (typeof message !== "string" || message.length === 0 || /[\uD800-\uDFFF]/u.test(message)) {
+        throw fail("message must be a non-empty, well-formed string", "INVALID_PARAMS");
       }
       confirm();
       // Not a real signature: a deterministic stand-in in the zbase32 alphabet.
@@ -314,10 +325,8 @@ export function createMockProvider(options = {}) {
         name: args.name,
         precision: args.precision ?? 0,
       };
-      assets.set(assetId, {
-        asset,
-        balance: args.amounts.reduce((sum, amount) => sum + amount, 0),
-      });
+      const supply = args.amounts.reduce((sum, amount) => sum + amount, 0);
+      assets.set(assetId, { asset, balance: supply, issuedSupply: supply });
       return { assetId, asset: /** @type {Record<string, unknown>} */ ({ ...asset }) };
     },
 
@@ -398,7 +407,7 @@ export function createMockProvider(options = {}) {
       await call("decodeRgbInvoice", [args]);
       if (!invoice) throw fail("An invoice is required", "INVALID_PARAMS");
       const assetId = parseAssetId(invoice);
-      const amount = /\/(\d+)\+utxob:/.exec(invoice);
+      const amount = /\/(\d+)\+(?:utxob|wvout):/.exec(invoice);
       return {
         assetId,
         // A fungible 0 is an any-amount invoice, not a request for zero.
