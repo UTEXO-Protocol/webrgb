@@ -6,8 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Based on upstream `@kaleidorg/webrgb` 0.5.0.
+
 ### Added
 
+- The README and every changelog entry state which upstream release they are
+  based on.
 - Sync with upstream `@kaleidorg/webrgb` 0.5.0: `cancelReceive(recipientId)`,
   `signPsbt(psbt, opts?)`, error code `UNSAFE_PSBT`, `mockPsbt()`, transport
   adapters in SPEC.md §1, and a deterministic default signer in the mock.
@@ -17,6 +21,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `refresh`: a rejection does not mean nothing changed, since other transfers
+  may have advanced. Callers should re-read transfer state after any refresh.
 - `feeRate` in `createUtxos` and `burnAsset` accepts any positive finite
   sat/vB, as upstream does, instead of integers only. Wallets reject rates
   outside their backend's limits with `INVALID_PARAMS`; rgb-lib wallets round
@@ -44,6 +50,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.1.7]
 
+Based on upstream `@kaleidorg/webrgb` 0.3.0, with `createUtxos`,
+`getBtcBalance`, `refresh` and `getAssetMetadata` ported from 0.4.0.
+
 ### Changed
 
 - Allow an any-asset invoice in `getReceivedMint` so a wallet can receive its
@@ -54,6 +63,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
   paying.
 
 ## [0.1.6]
+
+Based on upstream `@kaleidorg/webrgb` 0.3.0, with `createUtxos`,
+`getBtcBalance`, `refresh` and `getAssetMetadata` ported from 0.4.0.
 
 ### Breaking
 
@@ -74,6 +86,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Document native method mappings and burn contract migration.
 
 ## [0.1.5]
+
+Based on upstream `@kaleidorg/webrgb` 0.3.0, like every earlier `@utexo/webrgb`
+release.
 
 ### Fixed
 
