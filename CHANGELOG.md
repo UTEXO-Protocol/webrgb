@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-24
+
 Based on upstream `@kaleidorg/webrgb` 0.5.0.
 
 ### Added

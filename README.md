@@ -197,7 +197,7 @@ The error crosses a `postMessage` boundary on its way out of the wallet, so what
 | --- | --- |
 | 0.1.0 – 0.1.5 | 0.3.0 |
 | 0.1.6 – 0.1.7 | 0.3.0, with `createUtxos`, `getBtcBalance`, `refresh` and `getAssetMetadata` ported from 0.4.0 |
-| Unreleased (`dev`) | 0.5.0 |
+| 0.2.0 | 0.5.0 |
 
 The [changelog](./CHANGELOG.md) states the base of every release.
 
