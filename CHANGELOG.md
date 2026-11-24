@@ -11,7 +11,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Conformance `methods-present`: every `RgbProvider` method must exist as a
   function, served or not. `getBtcBalance-unlisted`, `refresh-unlisted` and
   `getAssetMetadata-unlisted` call those reads when `methods` does not list
-  them and expect `METHOD_NOT_SUPPORTED`; the existing Lightning probe stays.
+  them and expect `METHOD_NOT_SUPPORTED`.
 
 ### Changed
 
@@ -19,8 +19,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   `methods`.
 - `freeColorableUtxos` counts empty UTXOs, not receiving capacity: `0` does not
   mean `blindReceive` rejects; it rejects with `NO_AVAILABLE_UTXOS` when the
-  wallet cannot allocate a receiving slot. README and the playground say the
-  same.
+  wallet cannot allocate a receiving slot.
 - `signMessage` also rejects a string with an unpaired surrogate with
   `INVALID_PARAMS`.
 - `createUtxos`: `num` is 1..255, `size` a positive u32 and `feeRate` positive

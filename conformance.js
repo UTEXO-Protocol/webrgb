@@ -164,9 +164,8 @@ export async function runConformance(provider, options = {}) {
     assert(missing.length === 0, `provider lacks ${missing.join(", ")}; unserved methods must reject instead`);
   });
 
-  // An unlisted method must reject with METHOD_NOT_SUPPORTED. Only reads that
-  // cannot prompt are called here, with a nonexistent asset where one is taken;
-  // methods that prompt, spend or share data are checked for presence only.
+  // These unlisted reads must reject with METHOD_NOT_SUPPORTED.
+  // Use a nonexistent asset where applicable; see SPEC §7 for probe limits.
   /** @type {Partial<Record<import("./index.js").RgbMethod, () => Promise<unknown>>>} */
   const unlistedProbes = {
     getBtcBalance: () => provider.getBtcBalance(),

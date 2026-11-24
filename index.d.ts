@@ -366,8 +366,8 @@ export interface RgbProvider {
    */
   witnessReceive(args?: RgbBlindReceiveArgs): Promise<RgbBlindReceiveResult>;
   /**
-   * Spend on-chain bitcoin to create colorable UTXOs. Prompts. Never retry
-   * it automatically: a timeout does not mean nothing was spent.
+   * Spend on-chain bitcoin to create colorable UTXOs. Prompts. No automatic
+   * retries: a timed-out call may still have spent funds.
    */
   createUtxos(args?: RgbCreateUtxosArgs): Promise<RgbCreateUtxosResult>;
   /**
